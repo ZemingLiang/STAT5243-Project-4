@@ -8,6 +8,22 @@
 // "have a specific concrete answer ready when someone asks".
 
 const pptxgen = require("pptxgenjs");
+const fs = require("fs");
+const path = require("path");
+
+// Resolve a figure path relative to the slides/ directory and confirm it exists.
+const FIG_DIR = path.join(__dirname, "..", "figures");
+function fig(name) {
+  const p = path.join(FIG_DIR, name);
+  return fs.existsSync(p) ? p : null;
+}
+
+function addImageFitted(slide, imgPath, x, y, w, h) {
+  slide.addImage({
+    path: imgPath, x, y, w, h,
+    sizing: { type: "contain", w, h },
+  });
+}
 
 // =============================================================================
 // PALETTE & TYPOGRAPHY (same as oral deck for visual consistency)
@@ -366,20 +382,25 @@ Routing rule: if the question is about methodology, anti-leakage, or a specific 
     "Brier  =  Reliability  −  Resolution  +  Uncertainty",
     { title: "Murphy decomposition", fontSize: 14 });
 
-  // Calibration plot placeholder.
+  // Real calibration plot (Pinnacle market) embedded.
   s.addShape("rect", { x: 5.40, y: 3.30, w: 4.10, h: 1.75,
     fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 }, shadow: cardShadow() });
-  s.addText("RELIABILITY DIAGRAM (placeholder)", {
-    x: 5.40, y: 3.45, w: 4.10, h: 0.30,
-    fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY_DK, charSpacing: 3, align: "center", margin: 0,
-  });
-  s.addText("figures/calibration_plot.png", {
-    x: 5.40, y: 4.10, w: 4.10, h: 0.25,
-    fontFace: FONT.MONO, fontSize: 9, color: COLOR.MUTED, align: "center", margin: 0,
-  });
-  s.addText("Diagonal = perfectly calibrated. We plot it for every model.", {
-    x: 5.40, y: 4.65, w: 4.10, h: 0.30,
-    fontFace: FONT.BODY, italic: true, fontSize: 10, color: COLOR.MUTED, align: "center", margin: 0,
+  if (fig("09_market_calibration.png")) {
+    addImageFitted(s, fig("09_market_calibration.png"),
+      5.45, 3.34, 4.00, 1.42);
+  } else {
+    s.addText("RELIABILITY DIAGRAM (placeholder)", {
+      x: 5.40, y: 3.45, w: 4.10, h: 0.30,
+      fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY_DK, charSpacing: 3, align: "center", margin: 0,
+    });
+    s.addText("figures/09_market_calibration.png", {
+      x: 5.40, y: 4.10, w: 4.10, h: 0.25,
+      fontFace: FONT.MONO, fontSize: 9, color: COLOR.MUTED, align: "center", margin: 0,
+    });
+  }
+  s.addText("Pinnacle close: essentially on the diagonal — pure calibration.", {
+    x: 5.40, y: 4.78, w: 4.10, h: 0.25,
+    fontFace: FONT.BODY, italic: true, fontSize: 9.5, color: COLOR.MUTED, align: "center", margin: 0,
   });
 
   s.addNotes(
@@ -708,16 +729,25 @@ Routing rule: if the question is about methodology, anti-leakage, or a specific 
     rowH: 0.20, valign: "middle",
   });
 
-  // Right: PCA plot placeholder.
+  // Real PCA + K-means figure embedded.
   s.addShape("rect", { x: 5.70, y: 1.45, w: 3.80, h: 3.60,
     fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 }, shadow: cardShadow() });
-  s.addText("PCA-2 SCATTER, K-MEANS COLOURED (placeholder)", {
-    x: 5.70, y: 1.55, w: 3.80, h: 0.40,
-    fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY_DK, charSpacing: 3, align: "center", margin: 0,
-  });
-  s.addText("figures/pca_kmeans_scatter.png", {
-    x: 5.70, y: 4.55, w: 3.80, h: 0.30,
-    fontFace: FONT.MONO, fontSize: 9, color: COLOR.MUTED, align: "center", margin: 0,
+  if (fig("07_team_style_pca.png")) {
+    addImageFitted(s, fig("07_team_style_pca.png"),
+      5.75, 1.50, 3.70, 3.20);
+  } else {
+    s.addText("PCA-2 SCATTER, K-MEANS COLOURED (placeholder)", {
+      x: 5.70, y: 1.55, w: 3.80, h: 0.40,
+      fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY_DK, charSpacing: 3, align: "center", margin: 0,
+    });
+    s.addText("figures/07_team_style_pca.png", {
+      x: 5.70, y: 4.55, w: 3.80, h: 0.30,
+      fontFace: FONT.MONO, fontSize: 9, color: COLOR.MUTED, align: "center", margin: 0,
+    });
+  }
+  s.addText("PCA-2 with K-means (k=4) — see clusters identified on facing page.", {
+    x: 5.70, y: 4.75, w: 3.80, h: 0.28,
+    fontFace: FONT.BODY, italic: true, fontSize: 9, color: COLOR.MUTED, align: "center", margin: 0,
   });
 
   s.addNotes(

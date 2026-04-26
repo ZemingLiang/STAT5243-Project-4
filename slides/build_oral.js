@@ -1,7 +1,18 @@
 // Build the 10-minute oral presentation deck for STAT 5243 Project 4 Final.
 // Output: oral_10min.pptx
 //
-// Design direction:
+// Design direction (Advanced 25pt rubric — "tells a compelling story... strong
+// visuals... thoughtfully curated... pacing is smooth... deep understanding"):
+//
+//   * Every slide title is a SENTENCE-CASE TAKEAWAY, not a topic label.
+//   * Real figures from ../figures/ are embedded via addImage().
+//   * Speaker notes for every slide open with a transitional bridge sentence
+//     ("Coming off the previous slide..."), close with a pacing cue
+//     ("Spend ~50s, then click forward."), and total ~10 minutes of speech.
+//   * Live-demo slide is operational: 3-bullet demo script + fail-safe.
+//   * Conclusion ends on a single one-sentence takeaway the audience will
+//     remember after the room empties.
+//
 //   Palette is a content-informed take on Columbia Blue:
 //     - NAVY  (#0B2545) deep midnight navy = primary, dominant on title + dividers
 //     - PITCH (#13315C) muted slate-blue = secondary, subtle blocks
@@ -16,6 +27,8 @@
 //   carries the EPL-pitch-sideline feeling without resorting to clip-art.
 
 const pptxgen = require("pptxgenjs");
+const fs = require("fs");
+const path = require("path");
 
 // =============================================================================
 // PALETTE & TYPOGRAPHY
@@ -26,13 +39,14 @@ const COLOR = {
   SKY:   "B9D9EB",
   SKY_DK:"7FB3D5",
   CORAL: "E07A5F",
+  CORAL_LT:"FDF1ED",
   INK:   "1F2933",
   MUTED: "5A6573",
   PAPER: "F5F7FA",
   WHITE: "FFFFFF",
   RULE:  "D7DEE5",
 };
-const FONT = { HEAD: "Georgia", BODY: "Calibri" };
+const FONT = { HEAD: "Georgia", BODY: "Calibri", MONO: "Consolas" };
 
 // Slide geometry (LAYOUT_16x9 = 10" x 5.625")
 const W = 10.0, H = 5.625;
@@ -43,6 +57,14 @@ const FOOTER_TXT =
 const cardShadow = () => ({
   type: "outer", color: "000000", opacity: 0.10, blur: 8, offset: 2, angle: 135,
 });
+
+// Resolve a figure path relative to the slides/ directory and confirm it exists.
+// We render placeholders if a file is missing so the deck still builds.
+const FIG_DIR = path.join(__dirname, "..", "figures");
+function fig(name) {
+  const p = path.join(FIG_DIR, name);
+  return fs.existsSync(p) ? p : null;
+}
 
 // =============================================================================
 // DECORATION HELPERS
@@ -76,16 +98,15 @@ function paintTitleChrome(slide) {
   slide.addShape("rect", { x: 0,    y: 0, w: 0.18, h: H, fill: { color: COLOR.SKY },    line: { type: "none" } });
   slide.addShape("rect", { x: 0.30, y: 0, w: 0.04, h: H, fill: { color: COLOR.SKY_DK }, line: { type: "none" } });
   slide.addShape("rect", { x: 0.42, y: 0, w: 0.02, h: H, fill: { color: COLOR.CORAL },  line: { type: "none" } });
-}
-
-function paintDividerChrome(slide) {
-  slide.background = { color: COLOR.PITCH };
-  slide.addShape("rect", { x: 0, y: 0, w: 0.18, h: H, fill: { color: COLOR.SKY },   line: { type: "none" } });
-  slide.addShape("rect", { x: W-0.18, y: 0, w: 0.18, h: H, fill: { color: COLOR.SKY }, line: { type: "none" } });
+  // Subtle bottom right accent rule (pure shape, no clip-art).
+  slide.addShape("rect", { x: W - 0.18, y: 0, w: 0.18, h: H, fill: { color: COLOR.PITCH }, line: { type: "none" } });
+  slide.addShape("rect", { x: W - 0.04, y: 0, w: 0.04, h: H, fill: { color: COLOR.SKY_DK }, line: { type: "none" } });
 }
 
 function slideTitle(slide, title, kicker, opts = {}) {
-  const fontSize = opts.fontSize || 28;
+  const fontSize = opts.fontSize || 24;
+  const titleY = kicker ? 0.60 : 0.40;
+  const titleH = opts.titleH || 0.95;
   if (kicker) {
     slide.addText(kicker.toUpperCase(), {
       x: 0.5, y: 0.30, w: W - 1.0, h: 0.30,
@@ -94,8 +115,58 @@ function slideTitle(slide, title, kicker, opts = {}) {
     });
   }
   slide.addText(title, {
-    x: 0.5, y: kicker ? 0.60 : 0.40, w: W - 1.0, h: 0.65,
-    fontFace: FONT.HEAD, fontSize, bold: true, color: COLOR.NAVY, margin: 0,
+    x: 0.5, y: titleY, w: W - 1.0, h: titleH,
+    fontFace: FONT.HEAD, fontSize, bold: true, color: COLOR.NAVY,
+    lineSpacingMultiple: 1.05, margin: 0,
+  });
+}
+
+// Add an image with preserved aspect ratio inside (x, y, w, h).
+function addImageFitted(slide, imgPath, x, y, w, h) {
+  // pptxgenjs addImage with sizing.type="contain" preserves aspect ratio.
+  slide.addImage({
+    path: imgPath, x, y, w, h,
+    sizing: { type: "contain", w, h },
+  });
+}
+
+// Render a placeholder rectangle when a figure is missing — keeps the deck
+// well-aligned even if a single PNG is removed.
+function placeholder(slide, x, y, w, h, label) {
+  slide.addShape("rect", {
+    x, y, w, h,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
+    shadow: cardShadow(),
+  });
+  slide.addText("FIGURE PLACEHOLDER", {
+    x, y: y + h / 2 - 0.25, w, h: 0.30,
+    fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY_DK,
+    align: "center", charSpacing: 4, margin: 0,
+  });
+  slide.addText(label, {
+    x, y: y + h / 2 + 0.05, w, h: 0.25,
+    fontFace: FONT.MONO, fontSize: 9, color: COLOR.MUTED,
+    align: "center", margin: 0,
+  });
+}
+
+// Convenience: a "key insight" navy banner with a coral left rail. Used as the
+// punch-line of every content slide so each slide lands ONE takeaway.
+// Sized generously so multi-line bodies don't clip and the kicker label has
+// enough horizontal room for the spaced-out tracking.
+function keyBanner(slide, y, kickerLabel, body) {
+  const h = 0.62;
+  slide.addShape("rect", { x: 0.5, y, w: W - 1.0, h, fill: { color: COLOR.NAVY }, line: { type: "none" } });
+  slide.addShape("rect", { x: 0.5, y, w: 0.06, h, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+  slide.addText(kickerLabel, {
+    x: 0.70, y, w: 1.85, h,
+    fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY,
+    valign: "middle", charSpacing: 4, margin: 0,
+  });
+  slide.addText(body, {
+    x: 2.65, y: y + 0.04, w: W - 3.20, h: h - 0.08,
+    fontFace: FONT.BODY, italic: true, fontSize: 11, color: COLOR.WHITE,
+    valign: "middle", lineSpacingMultiple: 1.18, margin: 0,
   });
 }
 
@@ -161,13 +232,11 @@ const TOTAL = 12;
   s.addNotes(
 `Speaker notes — Slide 1 (Title). ~30s.
 
-Good [morning/afternoon] everyone. I'm Zeming Liang, and with my teammates Xiying Chen and our collaborator we built an end-to-end machine-learning system that predicts the 2020-21 English Premier League season using twenty-one seasons of self-collected data.
+Good [morning/afternoon]. I'm Zeming Liang, and with Xiying Chen and our collaborator we built an end-to-end ML system that predicts the 2020-21 Premier League from twenty-one seasons of self-collected data.
 
-Quick context for why we picked this. Football match prediction is a notoriously difficult problem because the data is small, the variance is high, and there is a sharp, liquid betting market that prices games for a living. Beating that market — or even getting close to it — is a real test of every step of the data science pipeline. So this project is the full pipeline: scraping, cleaning, NLP on unstructured match reports, feature engineering with strict anti-leakage discipline, six models including a domain-specific Dixon-Coles bivariate Poisson, and a deployed Shiny app where you can try it out yourself.
+We picked football because the data is small, the variance is huge, and there is a sharp betting market that prices games for a living — so beating it, or even getting close, is a real test of every step of the pipeline. In ten minutes I'll walk you scraping → NLP → features → six models → results → live app. By the last slide you'll know what we built, the headline number, and how we read it honestly.
 
-Today I'll walk you through the whole arc end to end. By the last slide you'll know exactly what we built, what the headline number was, and — importantly — how we interpret a result that is honest rather than spun.
-
-[Spend ~30s here. Then click forward.]`
+[~30s. Then click forward.]`
   );
 }
 
@@ -177,11 +246,11 @@ Today I'll walk you through the whole arc end to end. By the last slide you'll k
 {
   const s = pres.addSlide();
   paintContentChrome(s, 2, TOTAL);
-  slideTitle(s, "Can we predict the Premier League?", "The question");
+  slideTitle(s, "We chase four interlinked targets — not one.", "The question");
 
-  // Left: sub-question summary
+  // Left: sub-question summary.
   s.addText("Three increasingly hard bars to clear:", {
-    x: 0.5, y: 1.55, w: 5.4, h: 0.35,
+    x: 0.5, y: 1.65, w: 5.4, h: 0.32,
     fontFace: FONT.BODY, fontSize: 14, bold: true, color: COLOR.INK, margin: 0,
   });
   s.addText([
@@ -192,52 +261,64 @@ Today I'll walk you through the whole arc end to end. By the last slide you'll k
     { text: "Better than the bookmakers.   ", options: { bold: true } },
     { text: "Sharps are the hardest baseline of all.", options: { color: COLOR.MUTED } },
   ], {
-    x: 0.5, y: 1.95, w: 5.4, h: 1.55,
-    fontFace: FONT.BODY, fontSize: 14, color: COLOR.INK,
+    x: 0.5, y: 2.05, w: 5.4, h: 1.55,
+    fontFace: FONT.BODY, fontSize: 13.5, color: COLOR.INK,
     paraSpaceAfter: 8, lineSpacingMultiple: 1.30, margin: 0,
   });
 
-  s.addText("And we don't stop at one target.", {
-    x: 0.5, y: 3.65, w: 5.4, h: 0.30,
-    fontFace: FONT.HEAD, italic: true, fontSize: 13, color: COLOR.PITCH, margin: 0,
+  s.addText("Same probabilistic engine, four different stress tests.", {
+    x: 0.5, y: 3.70, w: 5.4, h: 0.30,
+    fontFace: FONT.HEAD, italic: true, fontSize: 12.5, color: COLOR.PITCH, margin: 0,
   });
 
-  // Right: four-target callout grid
+  // Right: four-target callout grid (2x2).
   const cards = [
-    { t: "Match outcome",     d: "Home / Draw / Away — 3-class probabilistic" },
-    { t: "Exact score",       d: "Bivariate Poisson via Dixon-Coles" },
-    { t: "Final standings",   d: "Monte Carlo simulation, 10k iterations" },
-    { t: "Beat the bookmaker",d: "Kelly-fractional ROI vs Pinnacle close" },
+    { t: "Match outcome",      d: "Home / Draw / Away — 3-class probabilistic" },
+    { t: "Exact score",        d: "Bivariate Poisson via Dixon-Coles" },
+    { t: "Final standings",    d: "Monte Carlo simulation, 10k iterations" },
+    { t: "Beat the bookmaker", d: "Kelly-fractional ROI vs Pinnacle close" },
   ];
-  const cx = 6.10, cy0 = 1.55, cw = 3.40, ch = 0.85, gap = 0.12;
+  const cx0 = 6.10, cy0 = 1.60, cw = 1.65, ch = 1.30, cgap = 0.10;
   cards.forEach((c, i) => {
-    const y = cy0 + i * (ch + gap);
+    const col = i % 2, row = Math.floor(i / 2);
+    const x = cx0 + col * (cw + cgap);
+    const y = cy0 + row * (ch + cgap);
     s.addShape("rect", {
-      x: cx, y, w: cw, h: ch,
+      x, y, w: cw, h: ch,
       fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
       shadow: cardShadow(),
     });
-    s.addShape("rect", { x: cx, y, w: 0.06, h: ch, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+    s.addShape("rect", { x, y, w: cw, h: 0.06, fill: { color: COLOR.CORAL }, line: { type: "none" } });
     s.addText(c.t, {
-      x: cx + 0.18, y: y + 0.08, w: cw - 0.25, h: 0.30,
-      fontFace: FONT.BODY, fontSize: 13, bold: true, color: COLOR.NAVY, margin: 0,
+      x: x + 0.10, y: y + 0.18, w: cw - 0.20, h: 0.40,
+      fontFace: FONT.BODY, fontSize: 11.5, bold: true, color: COLOR.NAVY, margin: 0,
     });
     s.addText(c.d, {
-      x: cx + 0.18, y: y + 0.40, w: cw - 0.25, h: 0.40,
-      fontFace: FONT.BODY, fontSize: 11, color: COLOR.MUTED, margin: 0,
+      x: x + 0.10, y: y + 0.60, w: cw - 0.20, h: ch - 0.65,
+      fontFace: FONT.BODY, fontSize: 9.5, color: COLOR.MUTED,
+      lineSpacingMultiple: 1.20, margin: 0,
     });
   });
 
+  // Cap the grid with a header.
+  s.addText("FOUR TARGETS", {
+    x: 6.10, y: 1.30, w: 3.40, h: 0.26,
+    fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.PITCH,
+    charSpacing: 4, margin: 0,
+  });
+
+  keyBanner(s, 4.50, "WHY FOUR", "A single per-match probability vector powers every target — getting it right pays off four times over.");
+
   s.addNotes(
-`Speaker notes — Slide 2 (The Question). ~50s.
+`Speaker notes — Slide 2 (The question). ~50s.
 
-The question we set out to answer has three increasingly hard bars to clear. The first is trivial: can we beat random, which is 33% on a three-class problem. The second is much less trivial — can we beat naive priors. The Premier League has a strong home-field advantage, so always-pick-Home is already around 46% accuracy. The third is the real test: can we beat the bookmakers, who are sharp, well-resourced, and whose closing odds incorporate every piece of public information up to kickoff. Spoiler: that last bar is much harder than it sounds.
+Picking up from the title — what does "predicting the Premier League" actually mean?
 
-We deliberately framed the project around four interlinked targets, not just one. Match outcome — that's the headline three-class classification with calibrated probabilities. Exact score — a bivariate Poisson where we predict joint home and away goals. Final standings — we simulate the full 380-match season ten thousand times and aggregate to a predicted league table. And finally, beat the bookmaker — translating the model's edge into a Kelly-fractional staking strategy and reporting its ROI on the held-out test season.
+Three increasingly hard bars to clear. Beat random — 33% floor. Beat naive priors — always-pick-Home is already 46%. And beat the bookmakers, whose closing odds aggregate every sharp's bets right up to kickoff.
 
-These four are interlinked because they share the same probabilistic engine, but they stress-test the model in very different ways. A model can be well-calibrated on H/D/A and still produce a nonsense final table.
+On the right, four interlinked targets. Match outcome: H/D/A with calibrated probabilities. Exact score: Dixon-Coles bivariate Poisson. Final standings: ten thousand Monte Carlo seasons. Beat-the-bookmaker: Kelly-fractional ROI on the hold-out. Same probabilistic engine drives all four — and a model can be well-calibrated on H/D/A yet produce a nonsense table, which is why we test all four.
 
-[Spend ~50s here. Then click forward.]`
+[~50s. Click forward.]`
   );
 }
 
@@ -247,16 +328,16 @@ These four are interlinked because they share the same probabilistic engine, but
 {
   const s = pres.addSlide();
   paintContentChrome(s, 3, TOTAL);
-  slideTitle(s, "Why football is genuinely hard", "Why this is hard");
+  slideTitle(s, "Football is genuinely hard — and 2020-21 is the worst-case test set.", "Why this is hard");
 
   // Four "challenge cards" in a 2x2 grid.
   const items = [
-    { h: "Tiny data",            b: "380 matches per season. Twenty-one seasons gives only ~7,890 rows — small for tabular ML." },
-    { h: "High variance",        b: "One deflected goal can flip an outcome. Match-level noise is huge relative to signal." },
-    { h: "Sharp bookmakers",     b: "Pinnacle's closing odds are the consensus of the most-informed actors with skin in the game." },
-    { h: "Distribution shift",   b: "Covid 2020-21 played behind closed doors. Home-win rate dropped from ≈46% to ≈36%." },
+    { h: "Tiny data",          b: "380 matches per season × 21 seasons = ~7,890 rows. Small for tabular ML." },
+    { h: "High variance",      b: "One deflected goal flips an outcome. Match-level noise rivals the signal." },
+    { h: "Sharp bookmakers",   b: "Pinnacle's closing odds aggregate the smartest bets in the world." },
+    { h: "Distribution shift", b: "Covid 2020-21 played behind closed doors. Home-win rate fell from ~46% to ~38%." },
   ];
-  const gx0 = 0.5, gy0 = 1.50, gw = 4.50, gh = 1.50, hgap = 0.20, vgap = 0.20;
+  const gx0 = 0.5, gy0 = 1.55, gw = 4.50, gh = 1.10, hgap = 0.20, vgap = 0.16;
   items.forEach((it, i) => {
     const col = i % 2, row = Math.floor(i / 2);
     const x = gx0 + col * (gw + hgap);
@@ -268,43 +349,39 @@ These four are interlinked because they share the same probabilistic engine, but
     });
     s.addShape("rect", { x, y, w: 0.06, h: gh, fill: { color: COLOR.SKY_DK }, line: { type: "none" } });
     s.addText(it.h, {
-      x: x + 0.20, y: y + 0.18, w: gw - 0.30, h: 0.40,
-      fontFace: FONT.HEAD, fontSize: 18, bold: true, color: COLOR.NAVY, margin: 0,
+      x: x + 0.20, y: y + 0.10, w: gw - 0.30, h: 0.34,
+      fontFace: FONT.HEAD, fontSize: 16, bold: true, color: COLOR.NAVY, margin: 0,
     });
     s.addText(it.b, {
-      x: x + 0.20, y: y + 0.65, w: gw - 0.30, h: gh - 0.75,
-      fontFace: FONT.BODY, fontSize: 12, color: COLOR.INK,
-      lineSpacingMultiple: 1.25, margin: 0,
+      x: x + 0.20, y: y + 0.46, w: gw - 0.30, h: gh - 0.52,
+      fontFace: FONT.BODY, fontSize: 10.5, color: COLOR.INK,
+      lineSpacingMultiple: 1.20, margin: 0,
     });
   });
 
-  // Inline punch-line stat at the bottom (placed safely above the footer).
+  // Bonus callout strip — placed safely above the key banner.
   s.addShape("rect", {
-    x: 0.5, y: 4.62, w: W - 1.0, h: 0.32,
+    x: 0.5, y: 4.05, w: W - 1.0, h: 0.30,
     fill: { color: COLOR.SKY }, line: { type: "none" },
   });
-  s.addText("Plus: promoted teams have zero Premier League history → cold-start every August.", {
-    x: 0.6, y: 4.62, w: W - 1.2, h: 0.32,
-    fontFace: FONT.BODY, italic: true, fontSize: 11, bold: true, color: COLOR.NAVY,
+  s.addText("Bonus difficulty: 3 promoted teams every August have zero Premier League history → cold-start every season.", {
+    x: 0.6, y: 4.05, w: W - 1.2, h: 0.30,
+    fontFace: FONT.BODY, italic: true, fontSize: 10.5, bold: true, color: COLOR.NAVY,
     valign: "middle", margin: 0,
   });
+
+  keyBanner(s, 4.50, "PUNCH LINE", "Even the bookmakers struggled with this season — that is exactly why we picked it.");
 
   s.addNotes(
 `Speaker notes — Slide 3 (Why this is hard). ~50s.
 
-Before I show what we built, I want to set expectations honestly. Football is one of the hardest sports to model. Here's why.
+Before I show what we built, expectations honestly. Football is one of the hardest sports to model, and 2020-21 is the worst-case version of it.
 
-First, the data is tiny by modern ML standards. Each Premier League season is only 380 matches, and we have twenty-one of them. That's under eight thousand rows total — orders of magnitude smaller than what tabular gradient-boosting was designed for.
+Tiny data: 380 matches per season, twenty-one seasons, under 8k rows. High variance: one deflected goal flips an outcome and the underlying skill didn't change. Sharp bookmakers: Pinnacle's closing odds are the closest thing to real-time market-priced probabilities outside finance. Distribution shift: Covid 2020-21 was played behind closed doors and home-win rate collapsed from 46% to 38% — textbook regime change on the hold-out.
 
-Second, the variance is enormous. One deflected goal in stoppage time can flip a Home win into a Draw, and the underlying skill gap that day didn't change at all. Match-level noise is comparable in size to the signal.
+Plus three promoted teams every August have zero Premier League history. We picked this season deliberately — even the bookmakers struggled with it.
 
-Third — and this is the brutal one — the bookmakers are the smartest baseline you've ever competed with. Pinnacle's closing odds aggregate the bets of every sharp in the world right up to kickoff. They are arguably the closest thing in finance to a real-time, market-priced probability.
-
-Fourth, our test season is 2020-21, which was played behind closed doors because of Covid. Home advantage collapsed from about forty-six percent to about thirty-six percent. That's a textbook distribution shift on the held-out set — exactly the worst-case for a model trained on pre-Covid data.
-
-And as a bonus difficulty, three teams get promoted every season with no Premier League history at all. Cold-start, every August.
-
-[Spend ~50s here. Then click forward.]`
+[~50s. Click forward.]`
   );
 }
 
@@ -314,19 +391,19 @@ And as a bonus difficulty, three teams get promoted every season with no Premier
 {
   const s = pres.addSlide();
   paintContentChrome(s, 4, TOTAL);
-  slideTitle(s, "Five sources, all self-collected — no Kaggle", "Data");
+  slideTitle(s, "We scraped every byte ourselves — five sources, no Kaggle.", "Data");
 
   // Big-stat callouts on the left.
   const stats = [
     { n: "7,890", l: "matches scraped" },
     { n: "21",    l: "seasons (2000-01 → 2020-21)" },
-    { n: "5",     l: "independent sources" },
+    { n: "45",    l: "engineered features" },
   ];
   stats.forEach((st, i) => {
     const y = 1.55 + i * 1.05;
     s.addText(st.n, {
       x: 0.5, y, w: 2.20, h: 0.65,
-      fontFace: FONT.HEAD, fontSize: 44, bold: true, color: COLOR.CORAL, margin: 0,
+      fontFace: FONT.HEAD, fontSize: 40, bold: true, color: COLOR.CORAL, margin: 0,
     });
     s.addText(st.l, {
       x: 0.5, y: y + 0.65, w: 2.20, h: 0.25,
@@ -337,8 +414,8 @@ And as a bonus difficulty, three teams get promoted every season with no Premier
   // Right: source table.
   const rows = [
     [
-      { text: "Source",    options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
-      { text: "Type",      options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
+      { text: "Source",      options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
+      { text: "Type",        options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
       { text: "What we get", options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
     ],
     ["football-data.co.uk", "Structured CSV",   "Results, half-time scores, closing odds"],
@@ -352,32 +429,31 @@ And as a bonus difficulty, three teams get promoted every season with no Premier
     ],
   ];
   s.addTable(rows, {
-    x: 3.20, y: 1.55, w: 6.30, h: 3.10,
+    x: 3.20, y: 1.55, w: 6.30, h: 2.45,
     colW: [1.85, 1.55, 2.90],
     fontSize: 10.5, fontFace: FONT.BODY, color: COLOR.INK,
     border: { type: "solid", pt: 0.5, color: COLOR.RULE },
-    rowH: 0.50, valign: "middle",
+    rowH: 0.40, valign: "middle",
   });
 
   s.addText(
-    "Every source is harmonised into the same canonical team-name dictionary " +
-    "before any join — the UnknownTeamError pattern fails fast on new variants.", {
-    x: 3.20, y: 4.85, w: 6.30, h: 0.30,
+    "All sources joined via canonical-team dictionary; UnknownTeamError fails fast.", {
+    x: 3.20, y: 4.10, w: 6.30, h: 0.26,
     fontFace: FONT.BODY, italic: true, fontSize: 10, color: COLOR.MUTED, margin: 0,
   });
 
+  keyBanner(s, 4.50, "WHY IT MATTERS", "The unstructured BBC/Guardian feed is the rubric magnet — the only way to bring text into a tabular pipeline.");
+
   s.addNotes(
-`Speaker notes — Slide 4 (Data sources). ~55s.
+`Speaker notes — Slide 4 (Data sources). ~50s.
 
-Onto the data. We did not use Kaggle. We collected every byte ourselves from five independent sources. Three big numbers on the left: seven thousand, eight hundred and ninety matches across twenty-one seasons from five independent sources.
+Onto the data. No Kaggle — we scraped every byte ourselves from five independent sources. Big numbers on the left: 7,890 matches, 21 seasons, 45 engineered features.
 
-The four structured sources are listed in the top of the table. football-data.co.uk gives us per-match results, half-time scores, and the closing betting odds — those odds become the market baseline that's the hardest thing to beat. ClubElo gives us daily Elo ratings going back to the year 2000. FBref via the soccerdata Python wrapper gives us advanced stats including expected goals, but only from 2017-18 onward — that data-availability gap turned into one of our challenges. Wikipedia gives us the manager-tenure and promotion-relegation context.
+Top of the table: football-data.co.uk gives results and the closing odds that become our hardest baseline. ClubElo gives daily Elo ratings since 2000. FBref via soccerdata gives advanced stats including expected goals, but only from 2017-18. Wikipedia gives manager and promotion context.
 
-The fifth row, in coral, is the showpiece of the cleaning pipeline. We scraped roughly 7,600 BBC and Guardian match-report HTML pages and pushed them through an NLP pipeline. That's the unstructured-to-structured story I'll demo on the next slide.
+The coral row is the showpiece — about 7,600 BBC and Guardian match-report HTML pages pushed through an NLP pipeline. That's the unstructured-to-structured story on the next slide.
 
-One discipline point at the bottom: every source uses different name spellings — "Man Utd" versus "Manchester United" versus "Manchester Utd" — so we built a canonical-name dictionary and fail fast on any unknown variant. That's how we avoided silent mis-joins, which would have polluted features without raising any error.
-
-[Spend ~55s here.]`
+[~50s. Click forward.]`
   );
 }
 
@@ -387,14 +463,14 @@ One discipline point at the bottom: every source uses different name spellings �
 {
   const s = pres.addSlide();
   paintContentChrome(s, 5, TOTAL);
-  slideTitle(s, "Match-report HTML  →  feature row", "Cleaning showcase");
+  slideTitle(s, "We turn match-report prose into 12 numbers a model can learn from.", "Cleaning showcase");
 
   // Process arrow row showing 4 stages.
   const stages = [
-    { h: "Scrape",  d: "BBC / Guardian\nmatch-report HTML" },
+    { h: "Scrape",  d: "BBC / Guardian\nHTML (JS-rendered)" },
     { h: "Parse",   d: "BeautifulSoup →\narticle text" },
-    { h: "NLP",     d: "spaCy NER + VADER +\nregex event classifier" },
-    { h: "Attach",  d: "Per-team sentiment +\n12 feature columns" },
+    { h: "NLP",     d: "spaCy NER + VADER +\nregex event tags" },
+    { h: "Attach",  d: "Per-team sentiment +\n12 leakage-safe cols" },
   ];
   const sx0 = 0.5, sy = 1.55, sw = 2.10, sh = 1.10, sgap = 0.20;
   stages.forEach((st, i) => {
@@ -415,7 +491,7 @@ One discipline point at the bottom: every source uses different name spellings �
       fontFace: FONT.BODY, fontSize: 10, color: COLOR.SKY, lineSpacingMultiple: 1.2, margin: 0,
     });
     if (i < stages.length - 1) {
-      s.addText("→", {
+      s.addText(">", {
         x: x + sw - 0.05, y: sy + sh / 2 - 0.20, w: sgap + 0.10, h: 0.40,
         fontFace: FONT.HEAD, fontSize: 22, bold: true, color: COLOR.CORAL,
         align: "center", margin: 0,
@@ -424,67 +500,73 @@ One discipline point at the bottom: every source uses different name spellings �
   });
 
   // Worked example block: input vs output.
-  const ex_y = 2.95;
-  const ex_card_h = 1.55;
+  const ex_y = 2.80;
+  const ex_card_h = 1.10;
   s.addText("Worked example", {
-    x: 0.5, y: ex_y, w: 9.0, h: 0.28,
-    fontFace: FONT.BODY, fontSize: 11, bold: true, charSpacing: 3, color: COLOR.PITCH, margin: 0,
+    x: 0.5, y: ex_y, w: 9.0, h: 0.24,
+    fontFace: FONT.BODY, fontSize: 10.5, bold: true, charSpacing: 3, color: COLOR.PITCH, margin: 0,
   });
 
+  // Bump card height a touch and give the label/body more vertical separation.
+  const cardTop = ex_y + 0.28;
   // Input card.
   s.addShape("rect", {
-    x: 0.5, y: ex_y + 0.30, w: 4.55, h: ex_card_h,
+    x: 0.5, y: cardTop, w: 4.55, h: ex_card_h,
     fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
     shadow: cardShadow(),
   });
-  s.addShape("rect", { x: 0.5, y: ex_y + 0.30, w: 0.06, h: ex_card_h, fill: { color: COLOR.SKY_DK }, line: { type: "none" } });
+  s.addShape("rect", { x: 0.5, y: cardTop, w: 0.06, h: ex_card_h, fill: { color: COLOR.SKY_DK }, line: { type: "none" } });
   s.addText("INPUT  ·  one sentence in", {
-    x: 0.65, y: ex_y + 0.38, w: 4.30, h: 0.25,
-    fontFace: FONT.BODY, fontSize: 9.5, bold: true, charSpacing: 2, color: COLOR.MUTED, margin: 0,
+    x: 0.68, y: cardTop + 0.06, w: 4.30, h: 0.20,
+    fontFace: FONT.BODY, fontSize: 9, bold: true, charSpacing: 2, color: COLOR.MUTED, margin: 0,
   });
   s.addText(
-`"Liverpool were sloppy in possession and were lucky to escape with a draw after a controversial VAR call denied Tottenham a stoppage-time winner."`,
+`"Liverpool were sloppy and were lucky to escape with a draw after a controversial VAR call denied Tottenham a stoppage-time winner."`,
   {
-    x: 0.65, y: ex_y + 0.62, w: 4.30, h: 1.10,
-    fontFace: FONT.HEAD, italic: true, fontSize: 10.5, color: COLOR.INK,
-    lineSpacingMultiple: 1.20, margin: 0,
+    x: 0.68, y: cardTop + 0.32, w: 4.30, h: ex_card_h - 0.36,
+    fontFace: FONT.HEAD, italic: true, fontSize: 10, color: COLOR.INK,
+    lineSpacingMultiple: 1.18, margin: 0,
   });
 
   // Output card.
   s.addShape("rect", {
-    x: 5.20, y: ex_y + 0.30, w: 4.30, h: ex_card_h,
+    x: 5.20, y: cardTop, w: 4.30, h: ex_card_h,
     fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
     shadow: cardShadow(),
   });
-  s.addShape("rect", { x: 5.20, y: ex_y + 0.30, w: 0.06, h: ex_card_h, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+  s.addShape("rect", { x: 5.20, y: cardTop, w: 0.06, h: ex_card_h, fill: { color: COLOR.CORAL }, line: { type: "none" } });
   s.addText("OUTPUT  ·  one feature row out", {
-    x: 5.35, y: ex_y + 0.38, w: 4.05, h: 0.25,
-    fontFace: FONT.BODY, fontSize: 9.5, bold: true, charSpacing: 2, color: COLOR.MUTED, margin: 0,
+    x: 5.38, y: cardTop + 0.06, w: 4.05, h: 0.20,
+    fontFace: FONT.BODY, fontSize: 9, bold: true, charSpacing: 2, color: COLOR.MUTED, margin: 0,
   });
   s.addText([
-    { text: "home_report_sentiment", options: { fontFace: "Consolas", color: COLOR.NAVY } },
+    { text: "home_report_sentiment", options: { fontFace: FONT.MONO, color: COLOR.NAVY } },
     { text: "  =  -0.42\n", options: { bold: true, color: COLOR.INK } },
-    { text: "away_report_sentiment", options: { fontFace: "Consolas", color: COLOR.NAVY } },
+    { text: "away_report_sentiment", options: { fontFace: FONT.MONO, color: COLOR.NAVY } },
     { text: "  =  +0.05\n", options: { bold: true, color: COLOR.INK } },
-    { text: "var_mention_count    ", options: { fontFace: "Consolas", color: COLOR.NAVY } },
+    { text: "var_mention_count    ", options: { fontFace: FONT.MONO, color: COLOR.NAVY } },
     { text: "  =  1\n", options: { bold: true, color: COLOR.INK } },
-    { text: "controversy_flag     ", options: { fontFace: "Consolas", color: COLOR.NAVY } },
+    { text: "controversy_flag     ", options: { fontFace: FONT.MONO, color: COLOR.NAVY } },
     { text: "  =  1", options: { bold: true, color: COLOR.CORAL } },
   ], {
-    x: 5.35, y: ex_y + 0.62, w: 4.05, h: 1.10,
-    fontFace: FONT.BODY, fontSize: 10.5, lineSpacingMultiple: 1.20, margin: 0,
+    x: 5.38, y: cardTop + 0.32, w: 4.05, h: ex_card_h - 0.36,
+    fontFace: FONT.BODY, fontSize: 9.5, lineSpacingMultiple: 1.18, margin: 0,
   });
 
+  keyBanner(s, 4.50, "LEAKAGE GUARD", "These NLP features are joined as PRIOR-season aggregates only — never the post-match report of the match itself.");
+
   s.addNotes(
-`Speaker notes — Slide 5 (Unstructured to structured). ~55s.
+`Speaker notes — Slide 5 (Cleaning showcase). ~55s.
 
-This is the slide I am personally proudest of, because the rubric specifically calls out unstructured data and most teams stop at scraping CSVs.
+Onto the NLP pipeline — the slide I'm most proud of, because the rubric calls out unstructured data and most teams stop at CSVs.
 
-The pipeline is four stages, shown across the top. We scrape the BBC and Guardian match-report HTML. We use BeautifulSoup to extract the article body text. We then run that text through three NLP layers in parallel. SpaCy with the English small model gives us named-entity recognition, which we use to count the people mentioned per side. VADER sentiment scores every sentence and we attribute it to whichever team is mentioned in that sentence — that's our per-team sentiment. And a regex classifier flags red cards, penalties, VAR mentions, and a controversy flag. All of that flows into roughly twelve derived columns per match.
+Four stages along the top. Scrape: BBC and Guardian pages are JS-rendered, so we use a headless fetcher and pivot to the static Wikipedia recap on failure. Parse: BeautifulSoup pulls article text. NLP: spaCy NER for player mentions, VADER per-team sentiment via sentence attribution, regex tags for red cards, penalties, VAR. Twelve columns flow out.
 
-The worked example at the bottom makes it concrete. The input is one sentence from a match report — "Liverpool were sloppy and were lucky to escape with a draw after a controversial VAR call denied Tottenham a winner." The output is what our pipeline writes to the parquet table for that match: home_report_sentiment is negative-point-four-two, away_report_sentiment is mildly positive, the VAR mention count is one, and the controversy flag fires. Those four numbers, combined with about eight others from the same article, become inputs to the model.
+Worked example. Input is one sentence calling Liverpool sloppy and noting a controversial VAR call. Output: negative home sentiment, mildly positive away, VAR count one, controversy flag fires.
 
-[Spend ~55s here. The unstructured story is the rubric magnet — slow down.]`
+Critically — the leakage guard in the banner — these NLP features are joined as PRIOR-season aggregates per team. A match report never describes its own match.
+
+[~55s. Slow down — this is the rubric magnet.]`
   );
 }
 
@@ -494,79 +576,80 @@ The worked example at the bottom makes it concrete. The input is one sentence fr
 {
   const s = pres.addSlide();
   paintContentChrome(s, 6, TOTAL);
-  slideTitle(s, "Three figures that shaped our modelling", "EDA");
+  slideTitle(s, "Three EDA findings shaped every modelling choice we made.", "EDA");
 
-  // Three figure placeholders horizontally.
-  const figs = [
-    { t: "Home-win rate by season",
-      c: "Annotate the Covid-2020 dip from ~46% to ~36%.",
-      f: "figures/eda_home_win_by_season.png" },
-    { t: "Goals-per-match distribution",
-      c: "Right-skewed; mean ≈ 2.7 goals; supports the Poisson choice.",
-      f: "figures/eda_goal_distribution.png" },
-    { t: "Team-style PCA, coloured by season",
-      c: "Style clusters drift over time — useful unsupervised feature.",
-      f: "figures/eda_team_style_pca.png" },
-  ];
-  const fx0 = 0.5, fy = 1.45, fw = 3.00, fh = 1.90, fgap = 0.15;
-  figs.forEach((f, i) => {
-    const x = fx0 + i * (fw + fgap);
-    // Placeholder rectangle for the figure.
-    s.addShape("rect", {
-      x, y: fy, w: fw, h: fh,
-      fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
-      shadow: cardShadow(),
-    });
-    s.addText("FIGURE PLACEHOLDER", {
-      x, y: fy + fh/2 - 0.45, w: fw, h: 0.30,
-      fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY_DK,
-      align: "center", charSpacing: 4, margin: 0,
-    });
-    s.addText(f.f, {
-      x, y: fy + fh/2 - 0.10, w: fw, h: 0.25,
-      fontFace: "Consolas", fontSize: 9, color: COLOR.MUTED,
-      align: "center", margin: 0,
-    });
-    s.addText(f.t, {
-      x, y: fy + fh + 0.08, w: fw, h: 0.30,
-      fontFace: FONT.BODY, fontSize: 12, bold: true, color: COLOR.NAVY, margin: 0,
-    });
-    s.addText(f.c, {
-      x, y: fy + fh + 0.40, w: fw, h: 0.50,
-      fontFace: FONT.BODY, fontSize: 10, color: COLOR.MUTED,
-      lineSpacingMultiple: 1.20, margin: 0,
-    });
+  // Hero figure on the left: home advantage by season (with the Covid dip).
+  const heroX = 0.50, heroY = 1.45, heroW = 5.20, heroH = 2.55;
+  s.addShape("rect", {
+    x: heroX, y: heroY, w: heroW, h: heroH,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 },
+    shadow: cardShadow(),
+  });
+  if (fig("02_home_advantage_by_season.png")) {
+    addImageFitted(s, fig("02_home_advantage_by_season.png"),
+      heroX + 0.06, heroY + 0.08, heroW - 0.12, heroH - 0.16);
+  } else {
+    placeholder(s, heroX, heroY, heroW, heroH, "figures/02_home_advantage_by_season.png");
+  }
+  s.addText("Home-win rate by season — the 2020-21 Covid cliff", {
+    x: heroX, y: heroY + heroH + 0.02, w: heroW, h: 0.20,
+    fontFace: FONT.BODY, fontSize: 10, italic: true, color: COLOR.MUTED, margin: 0,
   });
 
-  // Key finding banner — placed below the captions, above the footer rule.
-  s.addShape("rect", { x: 0.5, y: 4.65, w: W - 1.0, h: 0.42,
-    fill: { color: COLOR.NAVY }, line: { type: "none" } });
-  s.addShape("rect", { x: 0.5, y: 4.65, w: 0.06, h: 0.42, fill: { color: COLOR.CORAL }, line: { type: "none" } });
-  s.addText("KEY FINDING", {
-    x: 0.65, y: 4.65, w: 1.5, h: 0.42,
-    fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY,
-    valign: "middle", charSpacing: 4, margin: 0,
+  // Two stacked figures on the right.
+  const sideX = 5.95, sideW = 3.55, sideH = 1.20;
+  // Top: PCA team-style.
+  const pcaY = 1.45;
+  s.addShape("rect", {
+    x: sideX, y: pcaY, w: sideW, h: sideH,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 },
+    shadow: cardShadow(),
   });
-  s.addText("The 2020-21 Covid season is a regime shift our model has to handle, not pretend away.", {
-    x: 2.10, y: 4.65, w: 7.30, h: 0.42,
-    fontFace: FONT.BODY, italic: true, fontSize: 12, color: COLOR.WHITE,
-    valign: "middle", margin: 0,
+  if (fig("07_team_style_pca.png")) {
+    addImageFitted(s, fig("07_team_style_pca.png"),
+      sideX + 0.06, pcaY + 0.08, sideW - 0.12, sideH - 0.16);
+  } else {
+    placeholder(s, sideX, pcaY, sideW, sideH, "figures/07_team_style_pca.png");
+  }
+  s.addText("Team-style PCA (4 K-means clusters)", {
+    x: sideX, y: pcaY + sideH + 0.02, w: sideW, h: 0.20,
+    fontFace: FONT.BODY, fontSize: 9, italic: true, color: COLOR.MUTED, margin: 0,
   });
+
+  // Bottom: score-line heatmap.
+  const heatY = 2.94;
+  s.addShape("rect", {
+    x: sideX, y: heatY, w: sideW, h: sideH,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 },
+    shadow: cardShadow(),
+  });
+  if (fig("04_score_heatmap.png")) {
+    addImageFitted(s, fig("04_score_heatmap.png"),
+      sideX + 0.06, heatY + 0.08, sideW - 0.12, sideH - 0.16);
+  } else {
+    placeholder(s, sideX, heatY, sideW, sideH, "figures/04_score_heatmap.png");
+  }
+  s.addText("Scoreline frequencies — Poisson-shaped joint", {
+    x: sideX, y: heatY + sideH + 0.02, w: sideW, h: 0.20,
+    fontFace: FONT.BODY, fontSize: 9, italic: true, color: COLOR.MUTED, margin: 0,
+  });
+
+  keyBanner(s, 4.50, "WHAT WE LEARNED", "2020-21 is a regime shift we model around, not pretend away — and the joint-goals shape justifies a Poisson layer.");
 
   s.addNotes(
 `Speaker notes — Slide 6 (EDA). ~50s.
 
-Three quick figures from EDA that ended up actually shaping how we built the model. Note that the figure placeholders here will be regenerated by the EDA pipeline into the figures/ directory before the in-class talk — the captions tell you exactly what each one shows.
+Three EDA findings shaped how we built the model.
 
-The leftmost figure is home-win rate plotted by season. For two decades it sits flat around forty-six percent, and then in 2020-21 it falls off a cliff to about thirty-six percent — that's the Covid empty-stadiums effect, and it's the single most important fact about our test set.
+Big chart left: home-win rate by season. Twenty years flat around 46%, then 2020-21 falls off a cliff to 38% — the Covid empty-stadiums effect. The single most important fact about our test set.
 
-The middle figure is the distribution of total goals per match. It's right-skewed with a mean of about two-point-seven. That shape is exactly what justifies modelling scores as Poisson — and it's why we put a Dixon-Coles model in the zoo as a domain-specific complement to the gradient-boosted classifiers.
+Top right: PCA on team-season aggregate stats, K-means into four clusters. Pink Cluster 3 is the elite top-six like City and Liverpool, orange Cluster 1 is the relegation fight. Both the PC components and the cluster ID feed the supervised model — that's our unsupervised hook.
 
-The rightmost figure is a PCA projection of team-season-aggregate stats — possession, shots, xG, etc. — coloured by season. The clusters are real, they correspond to playing-style archetypes, and they drift over time as tactics evolve. We use those PCA components and a K-means cluster ID as inputs to the supervised model. That's our unsupervised-learning hook for the rubric.
+Bottom right: scoreline frequency heatmap. Mass clustered at 1-1, 1-0, 2-1, 2-0 — Poisson with a low-score correction, exactly what Dixon-Coles fits.
 
-The takeaway in the navy banner is the punch line: 2020-21 is a regime shift. Our model has to be robust to it, not blind to it.
+Banner takeaway: regime shift on test, Poisson-shaped joint.
 
-[Spend ~50s here.]`
+[~50s. Click forward.]`
   );
 }
 
@@ -576,18 +659,18 @@ The takeaway in the navy banner is the punch line: 2020-21 is a regime shift. Ou
 {
   const s = pres.addSlide();
   paintContentChrome(s, 7, TOTAL);
-  slideTitle(s, "Six feature families, one strict cutoff rule", "Feature engineering");
+  slideTitle(s, "Six feature families, one strict cutoff rule, one PCA + K-means hook.", "Feature engineering");
 
-  // Six feature-family cards in 2x3.
+  // Six feature-family cards in 2x3 on the left.
   const fams = [
     { h: "Form",         d: "Rolling N-match goals, points, xG. Leakage-safe shift." },
-    { h: "Strength",     d: "ClubElo + own Elo update; home-Elo minus away-Elo." },
+    { h: "Strength",     d: "ClubElo + own Elo update; home minus away." },
     { h: "Context",      d: "Rest days, derby flag, manager tenure." },
     { h: "Market",       d: "Pinnacle implied probabilities, vig-removed." },
-    { h: "Unsupervised", d: "PCA components + K-means style cluster ID." },
-    { h: "NLP-derived",  d: "Per-team sentiment, event tags, controversy flag." },
+    { h: "Unsupervised", d: "PCA-2 + K-means style cluster ID (k=4)." },
+    { h: "NLP-derived",  d: "Per-team sentiment, event tags, controversy." },
   ];
-  const gx0 = 0.5, gy0 = 1.45, gw = 3.00, gh = 1.20, hgap = 0.15, vgap = 0.15;
+  const gx0 = 0.5, gy0 = 1.45, gw = 1.83, gh = 1.05, hgap = 0.10, vgap = 0.10;
   fams.forEach((it, i) => {
     const col = i % 3, row = Math.floor(i / 3);
     const x = gx0 + col * (gw + hgap);
@@ -599,51 +682,73 @@ The takeaway in the navy banner is the punch line: 2020-21 is a regime shift. Ou
     });
     s.addShape("rect", { x, y, w: 0.06, h: gh, fill: { color: COLOR.SKY_DK }, line: { type: "none" } });
     s.addText(it.h, {
-      x: x + 0.18, y: y + 0.10, w: gw - 0.25, h: 0.32,
-      fontFace: FONT.HEAD, fontSize: 14, bold: true, color: COLOR.NAVY, margin: 0,
+      x: x + 0.14, y: y + 0.08, w: gw - 0.20, h: 0.30,
+      fontFace: FONT.HEAD, fontSize: 13, bold: true, color: COLOR.NAVY, margin: 0,
     });
     s.addText(it.d, {
-      x: x + 0.18, y: y + 0.45, w: gw - 0.25, h: gh - 0.55,
-      fontFace: FONT.BODY, fontSize: 10.5, color: COLOR.INK,
-      lineSpacingMultiple: 1.25, margin: 0,
+      x: x + 0.14, y: y + 0.40, w: gw - 0.20, h: gh - 0.45,
+      fontFace: FONT.BODY, fontSize: 9.5, color: COLOR.INK,
+      lineSpacingMultiple: 1.20, margin: 0,
     });
   });
 
-  // Anti-leakage rail along the bottom.
-  s.addShape("rect", { x: 0.5, y: 4.30, w: W - 1.0, h: 0.95,
+  // Right column: PCA mini-figure to double down on the unsupervised hook.
+  const pcaX = 6.40, pcaY = 1.45, pcaW = 3.10, pcaH = 2.30;
+  s.addShape("rect", {
+    x: pcaX, y: pcaY, w: pcaW, h: pcaH,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 },
+    shadow: cardShadow(),
+  });
+  if (fig("07_team_style_pca.png")) {
+    addImageFitted(s, fig("07_team_style_pca.png"),
+      pcaX + 0.06, pcaY + 0.08, pcaW - 0.12, pcaH - 0.16);
+  } else {
+    placeholder(s, pcaX, pcaY, pcaW, pcaH, "figures/07_team_style_pca.png");
+  }
+  s.addText("Cluster 3 = elite (Liverpool / City). Cluster 1 = relegation.", {
+    x: pcaX, y: pcaY + pcaH + 0.02, w: pcaW, h: 0.40,
+    fontFace: FONT.BODY, fontSize: 9, italic: true, color: COLOR.MUTED,
+    lineSpacingMultiple: 1.20, margin: 0,
+  });
+
+  // Anti-leakage rail along the bottom — compact 3-line block sized to fit
+  // safely above the footer rule.
+  const railY = 4.32, railH = 0.85;
+  s.addShape("rect", { x: 0.5, y: railY, w: W - 1.0, h: railH,
     fill: { color: COLOR.NAVY }, line: { type: "none" } });
-  s.addShape("rect", { x: 0.5, y: 4.30, w: 0.06, h: 0.95, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+  s.addShape("rect", { x: 0.5, y: railY, w: 0.06, h: railH, fill: { color: COLOR.CORAL }, line: { type: "none" } });
   s.addText("ANTI-LEAKAGE DISCIPLINE", {
-    x: 0.7, y: 4.38, w: 4.00, h: 0.28,
-    fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY, charSpacing: 4, margin: 0,
+    x: 0.7, y: railY + 0.06, w: 4.00, h: 0.22,
+    fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY, charSpacing: 4, margin: 0,
   });
   s.addText([
-    { text: "No random k-fold.   ", options: { bold: true, color: COLOR.WHITE } },
-    { text: "Walk-forward CV only.   ", options: { color: COLOR.SKY } },
-    { text: "Every rolling feature uses a strict ", options: { color: COLOR.WHITE } },
-    { text: "as_of", options: { fontFace: "Consolas", color: COLOR.CORAL } },
-    { text: " cutoff: only matches with kickoff < current match contribute.", options: { color: COLOR.WHITE } },
+    { text: "No random k-fold — walk-forward CV only.   ", options: { bold: true, color: COLOR.WHITE } },
+    { text: "Every rolling feature uses a strict ", options: { color: COLOR.SKY } },
+    { text: "as_of", options: { fontFace: FONT.MONO, color: COLOR.CORAL } },
+    { text: " cutoff.", options: { color: COLOR.SKY } },
   ], {
-    x: 0.7, y: 4.65, w: W - 1.4, h: 0.30,
-    fontFace: FONT.BODY, fontSize: 11, margin: 0,
+    x: 0.7, y: railY + 0.28, w: W - 1.4, h: 0.26,
+    fontFace: FONT.BODY, fontSize: 10.5, margin: 0,
   });
   s.addText([
     { text: "Unit-tested by  ", options: { color: COLOR.SKY } },
-    { text: "tests.test_no_temporal_leakage", options: { fontFace: "Consolas", color: COLOR.CORAL, bold: true } },
-    { text: "  in the CI pipeline on every push.", options: { color: COLOR.SKY } },
+    { text: "tests.test_no_temporal_leakage", options: { fontFace: FONT.MONO, color: COLOR.CORAL, bold: true } },
+    { text: "  in CI on every push.", options: { color: COLOR.SKY } },
   ], {
-    x: 0.7, y: 4.93, w: W - 1.4, h: 0.30,
-    fontFace: FONT.BODY, italic: true, fontSize: 10.5, margin: 0,
+    x: 0.7, y: railY + 0.54, w: W - 1.4, h: 0.26,
+    fontFace: FONT.BODY, italic: true, fontSize: 10, margin: 0,
   });
 
   s.addNotes(
-`Speaker notes — Slide 7 (Features). ~55s.
+`Speaker notes — Slide 7 (Feature engineering). ~55s.
 
-We engineered six families of features, shown in the 2-by-3 grid. The first three are the obvious ones for football. Form: rolling N-match averages of goals, points, xG, computed separately for last three / five / ten matches. Strength: club Elo from ClubElo plus our own Elo update, expressed as the home-minus-away Elo difference. Context: rest days since last match, derby flag for historic local rivalries, manager-tenure days. The fourth family is market features — the closing-odds implied probabilities from Pinnacle, with the bookmaker margin removed by renormalising H, D, and A to sum to one. The fifth family is the unsupervised hook the rubric asks for: PCA components on team-season aggregate stats plus a K-means style cluster ID. And the sixth is the NLP-derived features we just saw on the previous slide.
+Carrying EDA into features — six families on the left.
 
-The rail at the bottom is the discipline story, which I want to emphasise. Football leakage is the classic trap — random k-fold lets the future inform the past. We never use random k-fold. We use walk-forward expanding-window CV. And every rolling feature is computed with a strict as_of cutoff: only matches with kickoff strictly less than the current match are allowed to contribute. That invariant is unit-tested by tests.test_no_temporal_leakage and runs on every push in CI.
+Form: rolling 3/5/10-match goals, points, xG. Strength: ClubElo + our own Elo, home minus away. Context: rest days, derby flag, manager tenure. Market: Pinnacle implied probabilities, vig removed. Unsupervised: PCA-2 + K-means cluster ID, our rubric hook (chart on right). NLP: per-team sentiment, event tags, controversy flag.
 
-[Spend ~55s here. Speed up if behind.]`
+The bottom rail is the discipline story. Football's classic trap is random k-fold leaking the future. We never use it — walk-forward only, every rolling feature uses a strict as_of cutoff, and that invariant is unit-tested in CI on every push.
+
+[~55s. Speed up if behind.]`
   );
 }
 
@@ -653,7 +758,7 @@ The rail at the bottom is the discipline story, which I want to emphasise. Footb
 {
   const s = pres.addSlide();
   paintContentChrome(s, 8, TOTAL);
-  slideTitle(s, "Six models, one validation strategy", "Models");
+  slideTitle(s, "Three baselines, three models, one walk-forward validation.", "Models");
 
   const rows = [
     [
@@ -661,13 +766,13 @@ The rail at the bottom is the discipline story, which I want to emphasise. Footb
       { text: "Family",     options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
       { text: "Why we included it", options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 11 } },
     ],
-    ["Always-Home",     "Naive baseline",       "Sanity floor — exposes log-loss penalty for over-confidence."],
-    ["Class-Prior",     "Naive baseline",       "Predicts historical 46/25/29 H/D/A — the calibration floor."],
-    ["Market-Implied",  "Strong baseline",      "Pinnacle closing odds, vig-removed. The hardest bar to clear."],
-    ["Multinomial LR",  "Linear, interpretable","Reads off feature signs and magnitudes for sanity-checking."],
-    ["Random Forest",   "Tree ensemble",        "Captures non-linear interactions; robust to messy features."],
-    ["XGBoost",         "Gradient boosting",    "State-of-the-art for tabular; tuned for log-loss not accuracy."],
-    ["Dixon-Coles",     "Bivariate Poisson",    "Domain-specific; gives joint score distribution + outcome."],
+    ["Always-Home",     "Naive baseline",        "Sanity floor — exposes log-loss penalty for over-confidence."],
+    ["Class-Prior",     "Naive baseline",        "Predicts historical 46/25/29 H/D/A — calibration floor."],
+    ["Market-Implied",  "Strong baseline",       "Pinnacle closing odds, vig-removed. Hardest bar to clear."],
+    ["Multinomial LR",  "Linear, interpretable", "Reads off feature signs and magnitudes for sanity-checks."],
+    ["Random Forest",   "Tree ensemble",         "Captures non-linear interactions; robust to messy features."],
+    ["XGBoost",         "Gradient boosting",     "State-of-the-art for tabular; tuned for log-loss not accuracy."],
+    ["Dixon-Coles",     "Bivariate Poisson",     "Domain-specific; gives joint scores + outcome via marginal."],
   ];
   s.addTable(rows, {
     x: 0.5, y: 1.45, w: W - 1.0, h: 2.65,
@@ -685,8 +790,8 @@ The rail at the bottom is the discipline story, which I want to emphasise. Footb
     fontFace: FONT.BODY, fontSize: 9.5, bold: true, color: COLOR.NAVY, charSpacing: 4, margin: 0,
   });
   s.addText([
-    { text: "Walk-forward expanding-window CV", options: { bold: true } },
-    { text: "  ·  train 2000-01..2018-19, validate 2019-20, hold-out test 2020-21.\n", options: {} },
+    { text: "Walk-forward expanding window  ", options: { bold: true } },
+    { text: "·  train 2000-01..2018-19, validate 2019-20, hold-out test 2020-21.\n", options: {} },
     { text: "All hyperparameters tuned for log-loss",  options: { bold: true } },
     { text: " (proper scoring rule), not raw accuracy.", options: {} },
   ], {
@@ -696,47 +801,47 @@ The rail at the bottom is the discipline story, which I want to emphasise. Footb
   });
 
   s.addNotes(
-`Speaker notes — Slide 8 (Model zoo). ~55s.
+`Speaker notes — Slide 8 (Models). ~50s.
 
-Six models — actually seven if you count both naive baselines. Reading down the table: Always-Home is the sanity floor — it exposes how brutally log-loss punishes confident wrong probabilities. Class-Prior just predicts the historical class frequencies, which is the calibration floor. Market-Implied is the strong baseline — Pinnacle's closing odds with the bookmaker margin removed by renormalisation. That's the hardest bar to clear.
+With features set, the model zoo — three baselines, three models, plus Dixon-Coles, all on the same walk-forward CV.
 
-Then the real models. Multinomial logistic regression is our interpretable workhorse — when XGBoost and the Random Forest disagree we read off the LR coefficients to figure out why. Random Forest captures non-linear interactions and is robust to noisy features. XGBoost is the state-of-the-art for tabular data and we tuned it specifically for log-loss, not accuracy. Last is Dixon-Coles — a domain-specific bivariate Poisson that models home-goals and away-goals jointly, with the famous low-score correction term to fix the under-prediction of nil-nils that vanilla Poisson suffers from.
+Top to bottom. Always-Home: sanity floor that exposes log-loss penalties. Class-Prior: historical 46/25/29 frequencies — the calibration floor. Market-Implied: Pinnacle close, vig-removed — the hardest baseline. Multinomial LR: our interpretable workhorse for sanity-checks. Random Forest: non-linear, robust to noisy features. XGBoost: tabular state-of-the-art, tuned for log-loss. Dixon-Coles: bivariate Poisson — same fit gives exact scores and H/D/A by marginal.
 
-Validation, in the sky-blue strip: walk-forward expanding-window CV. Train on 2000-01 through 2018-19, validate on 2019-20, and hold out 2020-21 for the final test we never look at until the end. And we tune every hyperparameter for log-loss, because log-loss is a proper scoring rule and accuracy on a three-class problem is too coarse to differentiate models.
+Validation strip: walk-forward, train through 2018-19, validate 2019-20, hold out 2020-21. Every hyperparameter tuned for log-loss — proper scoring rule, three-class accuracy is too coarse.
 
-[Spend ~55s here.]`
+[~50s. Click forward.]`
   );
 }
 
 // ---------------------------------------------------------------------------
-// SLIDE 9 — RESULTS
+// SLIDE 9 — RESULTS (the punch-line slide)
 // ---------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   paintContentChrome(s, 9, TOTAL);
-  slideTitle(s, "The market wins. Our model gets within touching distance.", "Results");
+  slideTitle(s, "The closing-odds market beats every model — but only just.", "Results", { fontSize: 22 });
 
   // Leaderboard table — verbatim from results/leaderboard.csv.
   const lb = [
     [
       { text: "Model",         options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5 } },
-      { text: "Accuracy",      options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
+      { text: "Acc",           options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
       { text: "Log-loss",      options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
       { text: "Brier",         options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
-      { text: "F1 macro",      options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
-      { text: "AUC OvR",       options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
+      { text: "F1",            options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
+      { text: "AUC",           options: { bold: true, color: COLOR.WHITE, fill: { color: COLOR.NAVY }, fontSize: 10.5, align: "right" } },
     ],
     [
-      { text: "Market-implied (Pinnacle close)", options: { bold: true, color: COLOR.CORAL, fill: { color: "FDF1ED" } } },
-      { text: "0.516",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: "FDF1ED" } } },
-      { text: "0.997",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: "FDF1ED" } } },
-      { text: "0.592",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: "FDF1ED" } } },
-      { text: "0.385",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: "FDF1ED" } } },
-      { text: "0.669",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: "FDF1ED" } } },
+      { text: "Market-implied (Pinnacle close)", options: { bold: true, color: COLOR.CORAL, fill: { color: COLOR.CORAL_LT } } },
+      { text: "0.516",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: COLOR.CORAL_LT } } },
+      { text: "0.997",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: COLOR.CORAL_LT } } },
+      { text: "0.592",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: COLOR.CORAL_LT } } },
+      { text: "0.385",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: COLOR.CORAL_LT } } },
+      { text: "0.669",  options: { color: COLOR.CORAL, bold: true, align: "right", fill: { color: COLOR.CORAL_LT } } },
     ],
-    ["Random Forest",       { text: "0.513", options: { align: "right" } }, { text: "1.017", options: { align: "right" } }, { text: "0.606", options: { align: "right" } }, { text: "0.461", options: { align: "right" } }, { text: "0.646", options: { align: "right" } }],
-    ["Logistic regression", { text: "0.503", options: { align: "right" } }, { text: "1.026", options: { align: "right" } }, { text: "0.610", options: { align: "right" } }, { text: "0.466", options: { align: "right" } }, { text: "0.654", options: { align: "right" } }],
-    ["XGBoost",             { text: "0.511", options: { align: "right" } }, { text: "1.092", options: { align: "right" } }, { text: "0.640", options: { align: "right" } }, { text: "0.431", options: { align: "right" } }, { text: "0.628", options: { align: "right" } }],
+    ["Random Forest",       { text: "0.489", options: { align: "right" } }, { text: "1.020", options: { align: "right" } }, { text: "0.608", options: { align: "right" } }, { text: "0.448", options: { align: "right" } }, { text: "0.646", options: { align: "right" } }],
+    ["Logistic regression", { text: "0.495", options: { align: "right" } }, { text: "1.039", options: { align: "right" } }, { text: "0.617", options: { align: "right" } }, { text: "0.465", options: { align: "right" } }, { text: "0.645", options: { align: "right" } }],
+    ["XGBoost",             { text: "0.513", options: { align: "right" } }, { text: "1.106", options: { align: "right" } }, { text: "0.643", options: { align: "right" } }, { text: "0.428", options: { align: "right" } }, { text: "0.627", options: { align: "right" } }],
     ["Class-prior baseline",{ text: "0.379", options: { align: "right" } }, { text: "1.099", options: { align: "right" } }, { text: "0.669", options: { align: "right" } }, { text: "0.183", options: { align: "right" } }, { text: "0.500", options: { align: "right" } }],
     [
       { text: "Always-Home baseline", options: { color: COLOR.MUTED } },
@@ -748,33 +853,30 @@ Validation, in the sky-blue strip: walk-forward expanding-window CV. Train on 20
     ],
   ];
   s.addTable(lb, {
-    x: 0.5, y: 1.45, w: 6.30, h: 2.85,
-    colW: [2.50, 0.80, 0.80, 0.70, 0.80, 0.70],
-    fontSize: 10, fontFace: FONT.BODY, color: COLOR.INK,
+    x: 0.5, y: 1.55, w: 5.85, h: 2.75,
+    colW: [2.40, 0.55, 0.85, 0.65, 0.55, 0.55] ,
+    fontSize: 9.5, fontFace: FONT.BODY, color: COLOR.INK,
     border: { type: "solid", pt: 0.5, color: COLOR.RULE },
-    rowH: 0.34, valign: "middle",
+    rowH: 0.33, valign: "middle",
   });
 
-  // Right column: confusion-matrix placeholder + narrative.
+  // Right column: market calibration figure (the headline visual).
+  const calX = 6.55, calY = 1.55, calW = 2.95, calH = 2.70;
   s.addShape("rect", {
-    x: 7.05, y: 1.45, w: 2.45, h: 1.95,
-    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
+    x: calX, y: calY, w: calW, h: calH,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 },
     shadow: cardShadow(),
   });
-  s.addText("CONFUSION MATRIX", {
-    x: 7.05, y: 1.55, w: 2.45, h: 0.25,
-    fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY_DK,
-    align: "center", charSpacing: 3, margin: 0,
-  });
-  s.addText("figures/confusion_matrix_rf.png", {
-    x: 7.05, y: 2.30, w: 2.45, h: 0.25,
-    fontFace: "Consolas", fontSize: 8, color: COLOR.MUTED,
-    align: "center", margin: 0,
-  });
-  s.addText("Most errors: Draw → Home / Away.\nDraws are intrinsically the hardest class.", {
-    x: 7.10, y: 2.65, w: 2.35, h: 0.65,
-    fontFace: FONT.BODY, italic: true, fontSize: 10, color: COLOR.MUTED,
-    align: "center", lineSpacingMultiple: 1.25, margin: 0,
+  if (fig("09_market_calibration.png")) {
+    addImageFitted(s, fig("09_market_calibration.png"),
+      calX + 0.05, calY + 0.05, calW - 0.10, calH - 0.30);
+  } else {
+    placeholder(s, calX, calY, calW, calH, "figures/09_market_calibration.png");
+  }
+  s.addText("Market lies almost on the diagonal — essentially perfect calibration.", {
+    x: calX, y: calY + calH - 0.30, w: calW, h: 0.30,
+    fontFace: FONT.BODY, fontSize: 9, italic: true, color: COLOR.MUTED,
+    align: "center", lineSpacingMultiple: 1.15, margin: 0,
   });
 
   // Narrative pull-quote at the bottom.
@@ -782,109 +884,130 @@ Validation, in the sky-blue strip: walk-forward expanding-window CV. Train on 20
     fill: { color: COLOR.NAVY }, line: { type: "none" } });
   s.addShape("rect", { x: 0.5, y: 4.45, w: 0.06, h: 0.80, fill: { color: COLOR.CORAL }, line: { type: "none" } });
   s.addText([
-    { text: "Random Forest is within 0.3pp accuracy and 0.02 log-loss of the market", options: { bold: true, color: COLOR.WHITE } },
-    { text: " — using only the same engineered features the market presumably already prices.\n", options: { color: COLOR.SKY } },
-    { text: "And Always-Home's log-loss of 22.4? ", options: { color: COLOR.SKY } },
-    { text: "That's the cost of being confidently wrong about Draws and Aways.", options: { italic: true, color: COLOR.WHITE } },
+    { text: "Random Forest is within 0.02 log-loss of the market", options: { bold: true, color: COLOR.WHITE } },
+    { text: " — using only features the market presumably already prices.\n", options: { color: COLOR.SKY } },
+    { text: "Always-Home's log-loss of 22.4 ", options: { color: COLOR.SKY } },
+    { text: "is the cost of being confidently wrong about Draws and Aways.", options: { italic: true, color: COLOR.WHITE } },
   ], {
     x: 0.7, y: 4.50, w: W - 1.4, h: 0.70,
     fontFace: FONT.BODY, fontSize: 11.5, lineSpacingMultiple: 1.25, valign: "middle", margin: 0,
   });
 
   s.addNotes(
-`Speaker notes — Slide 9 (Results — the headline). ~70s. THIS IS THE PUNCH-LINE SLIDE.
+`Speaker notes — Slide 9 (Results — PUNCH LINE). ~70s.
 
-This is the most important slide of the talk. Let me read the table top to bottom.
+The most important slide of the talk. Also the most honest one.
 
-Sorted by log-loss, the leader is the market-implied baseline — Pinnacle's closing odds, with the bookmaker margin removed. Log-loss zero-point-nine-nine-seven, accuracy fifty-one-point-six percent. That's the hardest bar.
+Sorted by log-loss, the market-implied baseline leads — Pinnacle closing odds with the vig removed, log-loss 0.997. The chart on the right shows why: the market sits almost exactly on the diagonal. Essentially perfectly calibrated — when they say sixty percent, the home team wins about sixty percent. That is the ceiling.
 
-Random Forest is second: log-loss one-point-zero-one-seven, accuracy fifty-one-point-three percent. We are within zero-point-three percentage points of accuracy and about two percentage points of log-loss to the bookmakers — using only the engineered features they presumably already price into their odds. That is genuinely close.
+Random Forest is second — log-loss 1.02, only 0.02 worse than the market. LR and XGBoost trail. The naive baselines both get 38% accuracy. Look at the always-home log-loss in coral: 22.4. That is what assigning probability one to the wrong class costs. Log-loss is a proper scoring rule and it punishes confident wrong predictions catastrophically — which is exactly why log-loss, not accuracy, is our headline metric.
 
-Logistic regression and XGBoost trail Random Forest by another point or two. The two genuinely-naive baselines — class-prior and always-home — both get thirty-eight percent accuracy. But look at the always-home log-loss in coral on the bottom row: twenty-two-point-four. That is what happens when you assign probability one to the wrong class — log-loss is a proper scoring rule, and it punishes confident wrong predictions catastrophically. That number alone justifies why log-loss is our headline metric.
+The honest finding: the market is genuinely hard to beat. We get within touching distance using features the market presumably already prices. We are NOT going to spin that into "we beat the bookies" — knowing why we don't surpass them is the result.
 
-The card on the right is the confusion matrix; the figure is regenerated by the pipeline. The pattern is consistent across all our models: most errors are Draws being predicted as Home or Away wins. Draws are intrinsically the hardest class because they are not anyone's favoured outcome.
-
-The narrative in the navy banner is the honest finding: the market is genuinely hard to beat. Our model gets within touching distance, but it does not surpass the market. Being honest about that is the correct read.
-
-[Spend a full 70 seconds on this slide. It is the single most important moment of the talk.]`
+[Full 70s. The moment of the talk.]`
   );
 }
 
 // ---------------------------------------------------------------------------
-// SLIDE 10 — BONUS TARGETS
+// SLIDE 10 — BONUS TARGETS (final standings + Dixon-Coles + Kelly)
 // ---------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   paintContentChrome(s, 10, TOTAL);
-  slideTitle(s, "Three bonus targets, one shared engine", "Beyond H/D/A");
+  slideTitle(s, "Three bonus targets, one shared probabilistic engine.", "Beyond H/D/A");
 
+  // Left: stacked bullet cards for the three bonus targets.
   const items = [
     {
       h: "Exact score",
       pill: "Dixon-Coles",
-      d: "Joint home-goals × away-goals from the bivariate Poisson model. " +
-         "Fitted with a 0.0065/day exponential decay weight; the tau correction term " +
-         "fixes under-prediction of (0,0), (0,1), (1,0), (1,1) scorelines.",
+      status: "implemented",
+      d: "Joint home × away goals from bivariate Poisson with 0.0065/day decay; tau correction fixes 0-0 / 0-1 / 1-0 / 1-1 under-prediction.",
     },
     {
       h: "Final standings",
       pill: "Monte Carlo",
-      d: "10,000 simulations of the 380-match season. Each iteration rolls " +
-         "every match's H/D/A from the per-match probabilities, accumulates points, " +
-         "ranks teams. Output: title prob, top-4 prob, relegation prob with 5/95 bands.",
+      status: "implemented",
+      d: "10,000 simulated 380-match seasons; per-team title prob, top-4 prob, relegation prob with 5 / 95 bands.",
     },
     {
       h: "Beat the bookmaker",
       pill: "Kelly-fractional",
-      d: "Place when model edge = (p × decimal_odds − 1) > 0. Stake = " +
-         "Kelly fraction capped at 5% of bankroll. ROI on the 2020-21 season is " +
-         "the cleanest test — model conviction translated to dollars.",
+      status: "scaffolded",
+      d: "Bet only when edge = p·odds − 1 > 0; cap stake at 5% of bankroll; ROI on 2020-21 is the cleanest test of conviction.",
     },
   ];
-  const py = 1.50, ph = 1.10, pgap = 0.18;
+  const py = 1.50, ph = 0.85, pgap = 0.10;
   items.forEach((it, i) => {
     const y = py + i * (ph + pgap);
     s.addShape("rect", {
-      x: 0.5, y, w: W - 1.0, h: ph,
+      x: 0.5, y, w: 5.55, h: ph,
       fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
       shadow: cardShadow(),
     });
     s.addShape("rect", { x: 0.5, y, w: 0.06, h: ph, fill: { color: COLOR.CORAL }, line: { type: "none" } });
     s.addText(it.h, {
-      x: 0.70, y: y + 0.10, w: 3.0, h: 0.40,
-      fontFace: FONT.HEAD, fontSize: 18, bold: true, color: COLOR.NAVY, margin: 0,
+      x: 0.70, y: y + 0.06, w: 2.30, h: 0.30,
+      fontFace: FONT.HEAD, fontSize: 13, bold: true, color: COLOR.NAVY, margin: 0,
     });
     // Pill.
     s.addShape("roundRect", {
-      x: 3.85, y: y + 0.20, w: 1.55, h: 0.30,
+      x: 3.10, y: y + 0.10, w: 1.55, h: 0.26,
       fill: { color: COLOR.NAVY }, line: { type: "none" }, rectRadius: 0.06,
     });
     s.addText(it.pill, {
-      x: 3.85, y: y + 0.20, w: 1.55, h: 0.30,
-      fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY,
+      x: 3.10, y: y + 0.10, w: 1.55, h: 0.26,
+      fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY,
       align: "center", valign: "middle", margin: 0,
     });
+    // Status badge.
+    const isImpl = it.status === "implemented";
+    s.addText(isImpl ? "shipped" : "scaffolded", {
+      x: 4.75, y: y + 0.10, w: 1.20, h: 0.26,
+      fontFace: FONT.BODY, fontSize: 8.5, bold: true, italic: true,
+      color: isImpl ? COLOR.PITCH : COLOR.MUTED,
+      valign: "middle", charSpacing: 2, margin: 0,
+    });
     s.addText(it.d, {
-      x: 0.70, y: y + 0.55, w: W - 1.4, h: ph - 0.60,
-      fontFace: FONT.BODY, fontSize: 11.5, color: COLOR.INK,
-      lineSpacingMultiple: 1.25, margin: 0,
+      x: 0.70, y: y + 0.38, w: 5.30, h: ph - 0.42,
+      fontFace: FONT.BODY, fontSize: 10, color: COLOR.INK,
+      lineSpacingMultiple: 1.18, margin: 0,
     });
   });
 
+  // Right: simulated final standings figure.
+  const stX = 6.30, stY = 1.50, stW = 3.20, stH = 2.60;
+  s.addShape("rect", {
+    x: stX, y: stY, w: stW, h: stH,
+    fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 },
+    shadow: cardShadow(),
+  });
+  if (fig("10_final_standings.png")) {
+    addImageFitted(s, fig("10_final_standings.png"),
+      stX + 0.05, stY + 0.05, stW - 0.10, stH - 0.30);
+  } else {
+    placeholder(s, stX, stY, stW, stH, "figures/10_final_standings.png");
+  }
+  s.addText("2020-21 final standings — actual outcome, target of the simulator.", {
+    x: stX, y: stY + stH - 0.28, w: stW, h: 0.30,
+    fontFace: FONT.BODY, fontSize: 9, italic: true, color: COLOR.MUTED,
+    align: "center", lineSpacingMultiple: 1.20, margin: 0,
+  });
+
+  keyBanner(s, 4.50, "ONE ENGINE", "Per-match probabilities feed all three targets — calibration here pays off everywhere.");
+
   s.addNotes(
-`Speaker notes — Slide 10 (Bonus targets). ~50s.
+`Speaker notes — Slide 10 (Bonus targets). ~45s.
 
-Three bonus targets. All three share the same probabilistic engine — they're different ways of stress-testing the same per-match probabilities.
+Building on the per-match results, three bonus targets — all stress-tests of the same engine.
 
-First: exact score from Dixon-Coles. Bivariate Poisson on home-goals and away-goals, fitted with a daily exponential decay so recent matches matter more, plus the tau correction that fixes the well-known under-prediction of low-low scorelines like nil-nil and one-one. That gives us a joint score distribution we can marginalise to H/D/A or report as the single most-likely scoreline.
+Exact score from Dixon-Coles. Bivariate Poisson with daily exponential decay plus the tau correction that fixes the under-prediction of low-low scorelines. Shipped.
 
-Second: final standings via Monte Carlo. We take per-match probabilities and roll the entire 380-match season ten thousand times. Each iteration draws every match outcome, accumulates points, and ranks the table. Aggregating across iterations gives you each team's title probability, top-four probability, and relegation probability — and 5th-and-95th-percentile bands on their final ranking.
+Final standings via Monte Carlo. Ten thousand simulated 380-match seasons; aggregate gives title, top-four, relegation probabilities with bands. Chart on the right is the actual 2020-21 standings — the target. Shipped.
 
-Third: beat the bookmaker. Kelly-fractional staking, capped at five percent of bankroll per bet. We place a bet only when the model's edge — that's probability times decimal odds minus one — is strictly positive. ROI on the held-out 2020-21 season is the cleanest test of the model: this is conviction translated to dollars.
+Beat-the-bookmaker. Kelly-fractional, capped at 5%, bet only on positive edge. ROI on hold-out is conviction in dollars. Scaffolded — betting harness runs in the app, back-test in the appendix.
 
-The bonus-target tab in the live demo lets you re-roll each of these on the spot.
-
-[Spend ~50s here.]`
+[~45s. Click to demo.]`
   );
 }
 
@@ -894,129 +1017,143 @@ The bonus-target tab in the live demo lets you re-roll each of these on the spot
 {
   const s = pres.addSlide();
   paintContentChrome(s, 11, TOTAL);
-  slideTitle(s, "Live: a Shiny app on Posit Connect Cloud", "Demo");
+  slideTitle(s, "Live demo: pick a fixture, watch the model and the market disagree.", "Demo", { fontSize: 22 });
 
-  // Three demo tiles for the three tabs.
-  const tabs = [
-    { h: "Predict-a-Match",   d: "Pick any 2020-21 fixture; see model probabilities, market probabilities, and the implied edge." },
-    { h: "Season Simulator",  d: "10,000 Monte Carlo runs of the 2020-21 table; live histogram of each team's finishing rank." },
-    { h: "Leaderboard",       d: "Full evaluation: log-loss, Brier, calibration plot, confusion matrix per model." },
+  // App-screenshot placeholder (the screenshot file is a TODO until the app is captured fresh).
+  const ssX = 0.50, ssY = 1.50, ssW = 5.20, ssH = 2.95;
+  if (fig("11_app_predict_tab.png")) {
+    s.addShape("rect", { x: ssX, y: ssY, w: ssW, h: ssH,
+      fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.5 }, shadow: cardShadow() });
+    addImageFitted(s, fig("11_app_predict_tab.png"),
+      ssX + 0.05, ssY + 0.05, ssW - 0.10, ssH - 0.10);
+  } else {
+    placeholder(s, ssX, ssY, ssW, ssH, "figures/11_app_predict_tab.png");
+  }
+  s.addText("App screenshot — Predict tab (fresh capture morning-of)", {
+    x: ssX, y: ssY + ssH + 0.04, w: ssW, h: 0.22,
+    fontFace: FONT.BODY, fontSize: 10, italic: true, color: COLOR.MUTED, margin: 0,
+  });
+
+  // Right column: 3-bullet demo script + fail-safe.
+  const dsX = 5.95, dsY = 1.50, dsW = 3.55;
+  s.addText("3-MINUTE DEMO SCRIPT", {
+    x: dsX, y: dsY, w: dsW, h: 0.26,
+    fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.PITCH, charSpacing: 4, margin: 0,
+  });
+  const script = [
+    "Click  Predict  tab  →  pick  Liverpool vs Arsenal.",
+    "Show  model probabilities  vs  market probabilities  side-by-side.",
+    "Click  Run season simulation  →  10k Monte Carlo standings.",
   ];
-  const tx0 = 0.5, ty = 1.50, tw = 3.00, th = 2.80, tgap = 0.15;
-  tabs.forEach((tab, i) => {
-    const x = tx0 + i * (tw + tgap);
-    s.addShape("rect", {
-      x, y: ty, w: tw, h: th,
-      fill: { color: COLOR.WHITE }, line: { color: COLOR.RULE, width: 0.75 },
-      shadow: cardShadow(),
+  script.forEach((line, i) => {
+    const y = dsY + 0.30 + i * 0.62;
+    s.addShape("roundRect", {
+      x: dsX, y, w: 0.32, h: 0.32,
+      fill: { color: COLOR.CORAL }, line: { type: "none" }, rectRadius: 0.06,
     });
-    // Screenshot placeholder area.
-    s.addShape("rect", {
-      x: x + 0.15, y: ty + 0.15, w: tw - 0.30, h: 1.20,
-      fill: { color: COLOR.PAPER }, line: { color: COLOR.RULE, width: 0.5 },
+    s.addText(`${i + 1}`, {
+      x: dsX, y, w: 0.32, h: 0.32,
+      fontFace: FONT.HEAD, fontSize: 13, bold: true, color: COLOR.WHITE,
+      align: "center", valign: "middle", margin: 0,
     });
-    s.addText("SCREENSHOT", {
-      x: x + 0.15, y: ty + 0.55, w: tw - 0.30, h: 0.30,
-      fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY_DK,
-      align: "center", charSpacing: 3, margin: 0,
-    });
-    s.addText(`figures/demo_${i + 1}_${tab.h.toLowerCase().replace(/[^a-z]/g, "_")}.png`, {
-      x: x + 0.15, y: ty + 0.85, w: tw - 0.30, h: 0.25,
-      fontFace: "Consolas", fontSize: 8, color: COLOR.MUTED,
-      align: "center", margin: 0,
-    });
-    // Title strip.
-    s.addShape("rect", { x, y: ty + 1.50, w: 0.06, h: th - 1.55, fill: { color: COLOR.CORAL }, line: { type: "none" } });
-    s.addText(`Tab ${i + 1}.   ${tab.h}`, {
-      x: x + 0.18, y: ty + 1.55, w: tw - 0.30, h: 0.35,
-      fontFace: FONT.HEAD, fontSize: 14, bold: true, color: COLOR.NAVY, margin: 0,
-    });
-    s.addText(tab.d, {
-      x: x + 0.18, y: ty + 1.92, w: tw - 0.30, h: th - 2.00,
+    s.addText(line, {
+      x: dsX + 0.42, y: y - 0.02, w: dsW - 0.42, h: 0.55,
       fontFace: FONT.BODY, fontSize: 11, color: COLOR.INK,
-      lineSpacingMultiple: 1.25, margin: 0,
+      lineSpacingMultiple: 1.20, valign: "top", margin: 0,
     });
   });
 
+  // Fail-safe block.
+  s.addShape("rect", { x: dsX, y: 3.45, w: dsW, h: 1.00,
+    fill: { color: COLOR.PITCH }, line: { type: "none" } });
+  s.addShape("rect", { x: dsX, y: 3.45, w: 0.06, h: 1.00, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+  s.addText("IF DEMO FAILS", {
+    x: dsX + 0.18, y: 3.50, w: dsW - 0.20, h: 0.22,
+    fontFace: FONT.BODY, fontSize: 9, bold: true, color: COLOR.SKY, charSpacing: 4, margin: 0,
+  });
+  s.addText([
+    { text: "Fall back to backup screenshots ", options: { color: COLOR.WHITE } },
+    { text: "(figures/11_app_*.png)", options: { fontFace: FONT.MONO, color: COLOR.SKY, fontSize: 9 } },
+    { text: " — talk through the same three steps from the deck.", options: { color: COLOR.WHITE } },
+  ], {
+    x: dsX + 0.18, y: 3.74, w: dsW - 0.20, h: 0.65,
+    fontFace: FONT.BODY, fontSize: 10.5, lineSpacingMultiple: 1.20, valign: "top", margin: 0,
+  });
+
   // URL strip — placed above the footer rule.
-  s.addShape("rect", { x: 0.5, y: 4.45, w: W - 1.0, h: 0.50,
+  s.addShape("rect", { x: 0.5, y: 4.65, w: W - 1.0, h: 0.42,
     fill: { color: COLOR.NAVY }, line: { type: "none" } });
-  s.addShape("rect", { x: 0.5, y: 4.45, w: 0.06, h: 0.50, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+  s.addShape("rect", { x: 0.5, y: 4.65, w: 0.06, h: 0.42, fill: { color: COLOR.CORAL }, line: { type: "none" } });
   s.addText([
     { text: "Live URL:  ", options: { bold: true, color: COLOR.SKY } },
-    { text: "{TODO: pipeline owner to paste new Posit Connect Cloud URL}", options: { fontFace: "Consolas", color: COLOR.WHITE } },
+    { text: "{TODO: pipeline owner to paste new Posit Connect Cloud URL}", options: { fontFace: FONT.MONO, color: COLOR.WHITE } },
   ], {
-    x: 0.7, y: 4.45, w: W - 1.4, h: 0.50,
+    x: 0.7, y: 4.65, w: W - 1.4, h: 0.42,
     fontFace: FONT.BODY, fontSize: 11, valign: "middle", margin: 0,
   });
 
   s.addNotes(
-`Speaker notes — Slide 11 (Live demo). ~70s — DEMO IS THE STAR.
+`Speaker notes — Slide 11 (Live demo). ~60s — DEMO IS THE STAR.
 
-We deployed a Shiny-for-Python app to Posit Connect Cloud so anyone can replay the predictions interactively. Three tabs, shown across the slide.
+Time to make this real — switching to the live Shiny app on Posit Connect Cloud.
 
-Tab one: Predict-a-Match. Pick any 2020-21 fixture from the dropdown. The app shows our model's H/D/A probabilities, the market's H/D/A probabilities, and the implied edge — positive edges are highlighted in coral.
+Step one: click Predict tab, pick Liverpool vs Arsenal. Model probabilities and market probabilities side-by-side; coral marks any positive edge. Step two: show that on most matches the model and market agree within a couple of points — mirrors the leaderboard. Step three: hit Run season simulation. Ten thousand Monte Carlo seasons render in about three seconds; hover any team for title, top-four, and relegation probabilities with bands.
 
-Tab two: Season Simulator. One click runs ten thousand Monte Carlo simulations of the entire 2020-21 season and gives you a live histogram of where each team finishes. You can filter by team, sort by title probability, by top-four probability, by relegation probability.
+If the cloud breaks, fall back to the backup screenshots in figures/11_app_*.png — same three steps.
 
-Tab three: Leaderboard. The full evaluation suite from the previous slide, presented interactively — a calibration plot, confusion matrix per model, and the metrics table sortable by any column.
-
-The screenshots on the slide will be replaced with fresh captures from the deployed app the morning of the talk.
-
-I'll switch to the live app now and walk through one match end-to-end. [About 30 seconds at the laptop, then return to the deck.]
-
-[Total ~70s for this slide because of the live transition.]`
+[~60s with the live transition. Click to conclusion.]`
   );
 }
 
 // ---------------------------------------------------------------------------
-// SLIDE 12 — CONCLUSION + TEAM
+// SLIDE 12 — CONCLUSION + TEAM (impact slide)
 // ---------------------------------------------------------------------------
 {
   const s = pres.addSlide();
   paintContentChrome(s, 12, TOTAL);
-  slideTitle(s, "What we shipped, what's next, who did what", "Conclusion");
+  slideTitle(s, "What we shipped, what's next, who did what.", "Conclusion", { titleH: 0.55 });
 
-  // TL;DR block — give it more vertical room so the last line is not clipped.
+  // ONE-LINE TAKEAWAY in big navy banner — give it real visual weight.
+  // The takeaway wraps to ~2.5 lines at 15pt, so reserve 1.55" of vertical room.
+  const takeawayY = 1.45, takeawayH = 1.55;
   s.addShape("rect", {
-    x: 0.5, y: 1.45, w: W - 1.0, h: 1.40,
+    x: 0.5, y: takeawayY, w: W - 1.0, h: takeawayH,
     fill: { color: COLOR.NAVY }, line: { type: "none" },
   });
-  s.addShape("rect", { x: 0.5, y: 1.45, w: 0.06, h: 1.40, fill: { color: COLOR.CORAL }, line: { type: "none" } });
-  s.addText("TL;DR", {
-    x: 0.65, y: 1.55, w: 1.0, h: 0.30,
+  s.addShape("rect", { x: 0.5, y: takeawayY, w: 0.06, h: takeawayH, fill: { color: COLOR.CORAL }, line: { type: "none" } });
+  s.addText("REMEMBER THIS ONE LINE", {
+    x: 0.70, y: takeawayY + 0.10, w: 3.0, h: 0.24,
     fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.SKY, charSpacing: 4, margin: 0,
   });
   s.addText(
-    "End-to-end ML on 7,890 self-collected matches. Six models, walk-forward CV, " +
-    "four interlinked targets, deployed Shiny app. " +
-    "Random Forest within 0.3pp accuracy of the bookmakers — but the bookmakers still win. " +
-    "The honest finding: the market is genuinely hard to beat, and that itself is the result.",
+    "We built an end-to-end pipeline that gets within 0.02 log-loss of the bookmaker on the 2020-21 hold-out — and we know exactly why we don't beat them.",
   {
-    x: 1.70, y: 1.50, w: W - 2.40, h: 1.30,
-    fontFace: FONT.HEAD, italic: true, fontSize: 12.5, color: COLOR.WHITE,
-    lineSpacingMultiple: 1.30, valign: "middle", margin: 0,
+    x: 0.70, y: takeawayY + 0.40, w: W - 1.40, h: takeawayH - 0.50,
+    fontFace: FONT.HEAD, italic: false, fontSize: 15, bold: true, color: COLOR.WHITE,
+    lineSpacingMultiple: 1.20, valign: "top", margin: 0,
   });
 
   // Future work column (left).
   s.addText("FUTURE WORK", {
-    x: 0.5, y: 2.95, w: 4.5, h: 0.25,
+    x: 0.5, y: 3.15, w: 4.5, h: 0.24,
     fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.PITCH, charSpacing: 4, margin: 0,
   });
   s.addText([
     { text: "In-play features.   ", options: { bold: true } },
     { text: "Live xG, possession-by-half, lineup-strength deltas.\n", options: { color: COLOR.MUTED } },
     { text: "Hierarchical Bayes.   ", options: { bold: true } },
-    { text: "Borrow strength across seasons; tighter cold-start for promoted clubs.", options: { color: COLOR.MUTED } },
+    { text: "Borrow strength across seasons; cold-start for promoted clubs.\n", options: { color: COLOR.MUTED } },
+    { text: "Stacked ensemble.   ", options: { bold: true } },
+    { text: "Blend RF + Dixon-Coles + market on a validation slice.", options: { color: COLOR.MUTED } },
   ], {
-    x: 0.5, y: 3.22, w: 4.5, h: 1.20,
-    fontFace: FONT.BODY, fontSize: 11.5, color: COLOR.INK,
-    paraSpaceAfter: 6, lineSpacingMultiple: 1.30, margin: 0,
+    x: 0.5, y: 3.42, w: 4.5, h: 1.20,
+    fontFace: FONT.BODY, fontSize: 10.5, color: COLOR.INK,
+    paraSpaceAfter: 3, lineSpacingMultiple: 1.25, margin: 0,
   });
 
   // Team contributions table (right).
   s.addText("TEAM CONTRIBUTIONS", {
-    x: 5.20, y: 2.95, w: 4.3, h: 0.25,
+    x: 5.20, y: 3.15, w: 4.3, h: 0.24,
     fontFace: FONT.BODY, fontSize: 10, bold: true, color: COLOR.PITCH, charSpacing: 4, margin: 0,
   });
   const teamRows = [
@@ -1029,11 +1166,11 @@ I'll switch to the live app now and walk through one match end-to-end. [About 30
     [{ text: "Collaborator", options: { bold: true } }, "{TODO: confirm contribution}"],
   ];
   s.addTable(teamRows, {
-    x: 5.20, y: 3.22, w: 4.30, h: 1.36,
+    x: 5.20, y: 3.42, w: 4.30, h: 1.16,
     colW: [1.40, 2.90],
-    fontSize: 9, fontFace: FONT.BODY, color: COLOR.INK,
+    fontSize: 9.5, fontFace: FONT.BODY, color: COLOR.INK,
     border: { type: "solid", pt: 0.5, color: COLOR.RULE },
-    rowH: 0.32, valign: "middle",
+    rowH: 0.27, valign: "middle",
   });
 
   // Closing line — placed safely above the footer rule.
@@ -1042,7 +1179,7 @@ I'll switch to the live app now and walk through one match end-to-end. [About 30
   s.addText([
     { text: "Thank you.   ", options: { bold: true, color: COLOR.NAVY } },
     { text: "Questions?   ", options: { italic: true, color: COLOR.NAVY } },
-    { text: "github.com/ZemingLiang/STAT5243-Project-4", options: { fontFace: "Consolas", color: COLOR.PITCH } },
+    { text: "github.com/ZemingLiang/STAT5243-Project-4", options: { fontFace: FONT.MONO, color: COLOR.PITCH } },
   ], {
     x: 0.5, y: 4.65, w: W - 1.0, h: 0.45,
     fontFace: FONT.HEAD, fontSize: 14, align: "center", valign: "middle", margin: 0,
@@ -1051,15 +1188,17 @@ I'll switch to the live app now and walk through one match end-to-end. [About 30
   s.addNotes(
 `Speaker notes — Slide 12 (Conclusion + team). ~45s.
 
-Wrapping up. The TL;DR in the navy banner: end-to-end machine learning on nearly 8,000 self-collected matches, with six models, walk-forward cross-validation, four interlinked targets, and a deployed Shiny app. Random Forest gets within zero-point-three percentage points of the bookmakers — but the bookmakers still win. We're not going to spin that. The honest finding is that the closing market is genuinely hard to beat, and that itself is the result.
+Coming back from the demo — wrapping up.
 
-Two future-work bullets on the left. First, in-play features — live expected-goals, possession-by-half, and lineup-strength deltas would let us predict the second half conditioned on the first. Second, a hierarchical Bayesian model — borrowing strength across seasons would meaningfully tighten the cold-start problem for newly-promoted clubs.
+The one line: we built an end-to-end pipeline that gets within 0.02 log-loss of the bookmaker on the 2020-21 hold-out, and we know exactly why we don't beat them. The last clause matters as much as the first — the closing market is nearly perfectly calibrated, so this ceiling is rational to respect, not to spin around.
 
-Team contributions on the right. Zeming led the end-to-end coordination, the scrapers, the modelling, and the deployment. Elina led the EDA, the unsupervised features, the NLP pipeline, and the bulk of the report. Our collaborator's specific contribution will be filled in before submission.
+Future work: in-play features (live xG, possession-by-half, lineup deltas), hierarchical Bayes for tighter cold-start on promoted clubs, and a stacked ensemble blending RF + Dixon-Coles + market.
 
-Thank you. Happy to take questions, and the full code and report are public on GitHub at the URL on screen.
+Team contributions on the right. Zeming: coordination, scrapers, modelling, deployment. Elina: EDA, unsupervised features, NLP, report. Collaborator's contribution to be confirmed before submission. Code, leaderboard CSV, and companion report public on GitHub.
 
-[Spend ~45s here. Then transition to Q&A.]`
+Thank you. Questions?
+
+[~45s. Transition to Q&A.]`
   );
 }
 
