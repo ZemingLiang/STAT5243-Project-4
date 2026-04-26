@@ -190,8 +190,15 @@ def add_market_features(matches: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_processed_matches(
-    interim_matches: pd.DataFrame, *, out_path: str | Path = PROCESSED_DIR / "matches.parquet"
+    interim_matches: pd.DataFrame,
+    *,
+    out_path: str | Path = PROCESSED_DIR / "matches.parquet",
+    attach_unsupervised: bool = True,
+    attach_nlp_recap: bool = True,
 ) -> pd.DataFrame:
+    """Build the modeling matrix end-to-end. Chains:
+        interim -> temporal -> NLP recap features -> unsupervised cluster IDs
+    """
     LOG.info("Building processed matches from %d interim rows", len(interim_matches))
     matches = interim_matches.copy()
     matches = matches.sort_values("match_date").reset_index(drop=True)
@@ -199,9 +206,33 @@ def build_processed_matches(
     matches = add_derby_flag(matches)
     matches = add_market_features(matches)
     matches = add_target(matches)
+
+    if attach_nlp_recap:
+        try:
+            from src.nlp.wikipedia_recap_features import (
+                attach_recap_features_to_matches,
+                build_all_season_recaps,
+            )
+            recap = build_all_season_recaps()
+            if not recap.empty:
+                LOG.info("Attaching %d NLP recap-feature rows", len(recap))
+                matches = attach_recap_features_to_matches(matches, recap)
+        except Exception as exc:
+            LOG.warning("NLP recap feature attach failed: %s", exc)
+
+    if attach_unsupervised:
+        try:
+            from src.unsupervised import attach_to_matches as attach_unsup
+            from src.unsupervised import build_unsupervised
+            unsup = build_unsupervised(matches)
+            LOG.info("Attaching %d unsupervised team-season rows", len(unsup))
+            matches = attach_unsup(matches, unsup)
+        except Exception as exc:
+            LOG.warning("Unsupervised attach failed: %s", exc)
+
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     matches.to_parquet(out_path, index=False)
-    LOG.info("Wrote %d processed matches to %s", len(matches), out_path)
+    LOG.info("Wrote %d processed matches (%d cols) to %s", len(matches), len(matches.columns), out_path)
     return matches
 
 

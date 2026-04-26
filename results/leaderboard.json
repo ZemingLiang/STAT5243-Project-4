@@ -9,27 +9,19 @@
   },
   {
     "name":"random_forest",
-    "accuracy":0.5131578947,
-    "log_loss":1.0165619518,
-    "brier":0.6057267607,
-    "f1_macro":0.4612198231,
-    "auc_ovr_macro":0.6462136851
+    "accuracy":0.4894736842,
+    "log_loss":1.020396857,
+    "brier":0.6076325349,
+    "f1_macro":0.4484639678,
+    "auc_ovr_macro":0.6456042966
   },
   {
     "name":"logistic",
-    "accuracy":0.5026315789,
-    "log_loss":1.0260706383,
-    "brier":0.6097978724,
-    "f1_macro":0.4655312085,
-    "auc_ovr_macro":0.6543904377
-  },
-  {
-    "name":"xgboost",
-    "accuracy":0.5105263158,
-    "log_loss":1.0922609256,
-    "brier":0.6395033598,
-    "f1_macro":0.4307796518,
-    "auc_ovr_macro":0.6279209907
+    "accuracy":0.4947368421,
+    "log_loss":1.0387836265,
+    "brier":0.6173095778,
+    "f1_macro":0.4648643185,
+    "auc_ovr_macro":0.6450594108
   },
   {
     "name":"baseline_class_prior",
@@ -38,6 +30,14 @@
     "brier":0.6693515216,
     "f1_macro":0.1832061069,
     "auc_ovr_macro":0.5
+  },
+  {
+    "name":"xgboost",
+    "accuracy":0.5131578947,
+    "log_loss":1.1062365384,
+    "brier":0.6427426934,
+    "f1_macro":0.4276537969,
+    "auc_ovr_macro":0.6273368105
   },
   {
     "name":"baseline_always_home",

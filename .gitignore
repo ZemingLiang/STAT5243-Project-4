@@ -53,3 +53,8 @@ optuna.db
 # Misc
 *.log
 *.tmp
+
+# Node modules pulled in by slide-rendering tools (Marp, etc.)
+node_modules/
+slides/node_modules/
+*.tsbuildinfo

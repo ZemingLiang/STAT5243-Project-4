@@ -63,12 +63,20 @@ FEATURES_ALL = [
     "implied_prob_home_pinnacle_novig",
     "implied_prob_draw_pinnacle_novig",
     "implied_prob_away_pinnacle_novig",
-    # NLP features (NaN if BBC pipeline not yet run)
-    "home_report_sentiment",
-    "away_report_sentiment",
-    "controversy_flag",
-    "red_card_mention_count",
-    "penalty_mention_count",
+    # NLP features from Wikipedia recap prose (per-season per-team aggregates)
+    "home_recap_sentiment",
+    "away_recap_sentiment",
+    "home_mentions_count",
+    "away_mentions_count",
+    "home_title_mentioned",
+    "away_relegation_mentioned",
+    "home_controversy_count",
+    "away_controversy_count",
+    # Unsupervised: prior-season team-style PCA components + K-means cluster ID
+    "home_pca_1", "home_pca_2", "home_pca_3", "home_pca_4", "home_pca_5",
+    "away_pca_1", "away_pca_2", "away_pca_3", "away_pca_4", "away_pca_5",
+    "home_cluster_id",
+    "away_cluster_id",
 ]
 
 
