@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+env/
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Project — large data and derived artefacts
+# (Keep small fixtures in test_data/; do NOT commit raw scrapes or processed parquet.)
+data/raw/
+data/interim/
+data/processed/
+*.parquet
+*.feather
+*.csv.gz
+
+# But DO keep the canonical processed match dataset committed when ready (override at end of project)
+# !data/processed/matches.parquet
+
+# Soccerdata cache
+.soccerdata/
+soccerdata_cache/
+
+# Model artefacts
+models/*.joblib
+models/*.pkl
+results/leaderboard.csv
+results/predictions/
+
+# Optuna study DB
+optuna.db
+
+# Misc
+*.log
+*.tmp
