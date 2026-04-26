@@ -114,6 +114,8 @@ for canonical, variants in _TEAM_VARIANTS.items():
 
 def canonical(name: str) -> str:
     """Return the canonical EPL team name. Raises `UnknownTeamError` on miss."""
+    if not isinstance(name, str):
+        raise UnknownTeamError(f"Cannot canonicalize non-string team name: {name!r}")
     key = _normalize_token(name)
     if key not in _VARIANT_TO_CANONICAL:
         raise UnknownTeamError(
@@ -123,11 +125,11 @@ def canonical(name: str) -> str:
     return _VARIANT_TO_CANONICAL[key]
 
 
-def canonical_or_none(name: str) -> str | None:
-    """Return canonical name or None if unknown (for forgiving join paths)."""
+def canonical_or_none(name) -> str | None:
+    """Return canonical name or None if unknown / NaN / non-string."""
     try:
         return canonical(name)
-    except UnknownTeamError:
+    except (UnknownTeamError, AttributeError):
         return None
 
 

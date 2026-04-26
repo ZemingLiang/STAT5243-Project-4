@@ -60,8 +60,14 @@ def fetch_season(start_year: int, *, use_cache: bool = True) -> FootballDataResu
     LOG.info("Fetching football-data.co.uk season %s from %s", season_label(start_year), url)
     resp = cached_get(url, use_cache=use_cache)
     resp.raise_for_status()
-    # Some older seasons use Latin-1; pandas autodetects.
-    df = pd.read_csv(io.StringIO(resp.text), encoding_errors="replace")
+    # The football-data.co.uk CSVs occasionally contain rows with extra trailing
+    # commas / fields (artefact of Excel export); the python engine is forgiving.
+    df = pd.read_csv(
+        io.StringIO(resp.text),
+        encoding_errors="replace",
+        engine="python",
+        on_bad_lines="warn",
+    )
     df = _normalize(df, season=season_label(start_year))
     return FootballDataResult(
         season=season_label(start_year),
@@ -110,8 +116,16 @@ _RENAME = {
 def _normalize(df: pd.DataFrame, season: str) -> pd.DataFrame:
     keep = {k: v for k, v in _RENAME.items() if k in df.columns}
     out = df.rename(columns=keep)[list(keep.values())].copy()
+    # Drop rows where the essential identifier columns are blank — older CSVs sometimes have
+    # trailing blank rows or summary footer rows.
+    out = out.dropna(subset=["home_team_raw", "away_team_raw"], how="any").copy()
     # Try multiple date formats — football-data.co.uk has used both DD/MM/YY and DD/MM/YYYY.
-    out["match_date"] = pd.to_datetime(out["match_date"], dayfirst=True, errors="coerce")
+    # Two formats appear across seasons: 'DD/MM/YY' (older) and 'DD/MM/YYYY' (newer).
+    # `dayfirst=True` + format=None handles both; we suppress the inference warning.
+    import warnings as _w
+    with _w.catch_warnings():
+        _w.simplefilter("ignore")
+        out["match_date"] = pd.to_datetime(out["match_date"], dayfirst=True, errors="coerce")
     out["season"] = season
     out["home_team"] = out["home_team_raw"].map(canonical_or_none)
     out["away_team"] = out["away_team_raw"].map(canonical_or_none)
