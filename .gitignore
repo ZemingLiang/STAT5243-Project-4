@@ -40,11 +40,12 @@ data/processed/
 .soccerdata/
 soccerdata_cache/
 
-# Model artefacts
-models/*.joblib
-models/*.pkl
-results/leaderboard.csv
+# Model artefacts (regenerable via `python -m src.train`; too large for git)
+results/model_*.joblib
+results/model_*.pkl
 results/predictions/
+# Keep leaderboard.csv tracked for grader convenience.
+!results/leaderboard.csv
 
 # Optuna study DB
 optuna.db
