@@ -52,6 +52,7 @@ To satisfy the deliverable requirement for both raw and processed data, this rep
 - `data/raw/club_elo/*.parquet` — per-club historical Elo snapshots from ClubElo
 - `data/raw/wikipedia/*` — per-season recap tables and recap text artifacts
 - `data/interim/matches.parquet` — source-harmonized match-level table
+- `data/interim/matches.csv` — CSV export of the cleaned/interim match-level table
 - `data/processed/matches.parquet` — final model-ready matrix
 - `data/processed/matches.csv` — CSV export of the processed matrix for grading convenience
 
