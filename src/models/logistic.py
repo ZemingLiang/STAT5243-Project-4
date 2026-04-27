@@ -8,10 +8,11 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 
-def make_logistic(features: list[str]) -> Pipeline:
+def make_logistic(features: list[str], params: dict | None = None) -> Pipeline:
     """Returns a sklearn Pipeline: median-impute -> standardize -> multinomial LR."""
     from sklearn.impute import SimpleImputer
 
+    params = params or {}
     pre = ColumnTransformer(
         transformers=[
             (
@@ -25,8 +26,8 @@ def make_logistic(features: list[str]) -> Pipeline:
     clf = LogisticRegression(
         multi_class="multinomial",
         solver="lbfgs",
-        max_iter=2000,
-        C=1.0,
+        max_iter=int(params.get("max_iter", 2000)),
+        C=float(params.get("C", 1.0)),
         class_weight="balanced",
         random_state=20260426,
     )

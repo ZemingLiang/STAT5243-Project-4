@@ -30,6 +30,7 @@ LOG = logging.getLogger(__name__)
 
 PROCESSED = Path("data/processed/matches.parquet")
 RESULTS_DIR = Path("results")
+BEST_SELECTION = RESULTS_DIR / "best_model_selection.json"
 
 
 # -------- Feature catalogue (extends naturally as scrapers fill in NaNs) --------
@@ -134,12 +135,33 @@ def train_dixon_coles(train: pd.DataFrame, test: pd.DataFrame, y_test) -> tuple:
     return evaluate("dixon_coles", y_test, proba), dc
 
 
+def load_best_selection(path: Path = BEST_SELECTION) -> tuple[str | None, dict]:
+    """Return (best_model_name, params_dict) from model-selection output."""
+    if not path.exists():
+        return None, {}
+    try:
+        payload = json.loads(path.read_text())
+    except Exception as exc:
+        LOG.warning("Failed reading %s: %s", path, exc)
+        return None, {}
+    model_name = payload.get("model")
+    params = payload.get("params", {})
+    if isinstance(params, str):
+        try:
+            params = json.loads(params)
+        except Exception:
+            params = {}
+    if not isinstance(params, dict):
+        params = {}
+    return model_name, params
+
+
 # ---------------------------------------------------------------------------
 # Orchestrator
 # ---------------------------------------------------------------------------
 
 
-def run(models: list[str], *, quick: bool = False) -> pd.DataFrame:
+def run(models: list[str], *, quick: bool = False, use_best_selection: bool = True) -> pd.DataFrame:
     if not PROCESSED.exists():
         raise FileNotFoundError(
             f"{PROCESSED} not found. Run `python -m src.scrape.orchestrate --only football_data,club_elo` "
@@ -152,6 +174,11 @@ def run(models: list[str], *, quick: bool = False) -> pd.DataFrame:
 
     feats = available_features(df)
     LOG.info("Using %d features: %s", len(feats), feats[:8])
+    best_model_name, best_params = (None, {})
+    if use_best_selection:
+        best_model_name, best_params = load_best_selection()
+        if best_model_name is not None:
+            LOG.info("Loaded best selection: %s with params=%s", best_model_name, best_params)
 
     X_train, y_train = train[feats], train["target_outcome"].to_numpy()
     X_test, y_test = test[feats], test["target_outcome"].to_numpy()
@@ -163,24 +190,28 @@ def run(models: list[str], *, quick: bool = False) -> pd.DataFrame:
         reports.extend(train_baselines(train, test, X_test, y_test))
 
     if "logistic" in models or "all" in models:
-        r, m = train_sklearn_model("logistic", make_logistic(feats), X_train, y_train, X_test, y_test)
+        params = best_params if best_model_name == "logistic" else None
+        r, m = train_sklearn_model("logistic", make_logistic(feats, params=params), X_train, y_train, X_test, y_test)
         reports.append(r)
         saved_models["logistic"] = m
 
     if "random_forest" in models or "all" in models or quick:
+        params = best_params if best_model_name == "random_forest" else None
         r, m = train_sklearn_model(
-            "random_forest", make_random_forest(feats), X_train, y_train, X_test, y_test
+            "random_forest", make_random_forest(feats, params=params), X_train, y_train, X_test, y_test
         )
         reports.append(r)
         saved_models["random_forest"] = m
 
     if "xgboost" in models or "all" in models or quick:
-        r, m = train_sklearn_model("xgboost", make_xgboost(feats), X_train, y_train, X_test, y_test)
+        params = best_params if best_model_name == "xgboost" else None
+        r, m = train_sklearn_model("xgboost", make_xgboost(feats, params=params), X_train, y_train, X_test, y_test)
         reports.append(r)
         saved_models["xgboost"] = m
 
     if not quick and ("lightgbm" in models or "all" in models):
-        r, m = train_sklearn_model("lightgbm", make_lightgbm(feats), X_train, y_train, X_test, y_test)
+        params = best_params if best_model_name == "lightgbm" else None
+        r, m = train_sklearn_model("lightgbm", make_lightgbm(feats, params=params), X_train, y_train, X_test, y_test)
         reports.append(r)
         saved_models["lightgbm"] = m
 
@@ -210,6 +241,15 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--models", default="all", help="comma-separated, or 'all' / 'quick'")
     p.add_argument("--quick", action="store_true", help="fit only logistic + xgboost (fast)")
+    p.add_argument(
+        "--ignore-best-selection",
+        action="store_true",
+        help="Do not load results/best_model_selection.json; use model defaults.",
+    )
     args = p.parse_args()
-    table = run(args.models.split(","), quick=args.quick)
+    table = run(
+        args.models.split(","),
+        quick=args.quick,
+        use_best_selection=not args.ignore_best_selection,
+    )
     print(table.to_string(index=False))
