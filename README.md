@@ -81,24 +81,47 @@ If you re-run the pipeline, these files are regenerated in place.
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 
-# 2. Run the one-command pipeline:
+# 2. Run model selection only (writes results/model_selection.csv and results/best_model_selection.json)
+python -m src.model_selection --models all
+
+# 3. Run the one-command pipeline:
 #    feature engineering -> model selection -> final training
 python -m src.pipeline
 
-# 3. (Optional) Re-run only selection and training
+# 4. (Optional) Re-run only selection and training
 python -m src.pipeline --skip-feature-engineering
 
-# 4. Run the Shiny app
+# 5. Run the Shiny app
 shiny run app.py
 
-# 5. Generate the final PDF report
+# 6. Generate the final PDF report
 python -m src.fill_report --template REPORT.md --metrics results/leaderboard.csv --out REPORT.filled.md
 pandoc REPORT.filled.md -o report.pdf --pdf-engine=xelatex --toc --toc-depth=2 \
        -V mainfont="Helvetica Neue" -V monofont=Menlo
 
-# 6. Run smoke + leakage tests
+# 7. Run smoke + leakage tests
 python -m unittest tests
 ```
+
+---
+
+## Model selection workflow
+
+`src/model_selection.py` runs time-aware (season-based expanding-window) cross-validation and compares hyperparameter candidates for:
+
+- `logistic`
+- `random_forest`
+- `xgboost`
+- `lightgbm`
+
+Outputs:
+
+- `results/model_selection.csv` — full candidate leaderboard
+- `results/best_model_selection.json` — the selected best candidate
+
+`src/train.py` automatically reads `results/best_model_selection.json` (if present) and applies those parameters to the matching model family during final training.
+
+Use `python -m src.train --ignore-best-selection` to force default model parameters.
 
 ---
 
@@ -129,7 +152,9 @@ STAT5243-Project-4/
 │   ├── evaluate.py              # full metrics suite + calibration + confusion
 │   ├── betting.py               # closing-odds-implied probs + Kelly + ROI sim
 │   ├── season_sim.py            # Monte Carlo 2020-21 standings (10k iter)
+│   ├── model_selection.py       # time-aware CV + hyperparameter selection
 │   ├── train.py                 # walk-forward CV + Optuna tuner CLI
+│   ├── pipeline.py              # one-command FE -> selection -> train runner
 │   └── fill_report.py           # populate REPORT.md placeholders from results/
 ├── notebooks/                   # exploratory (not the final deliverable)
 ├── app.py                       # Shiny app entrypoint (six tabs)
