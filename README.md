@@ -44,6 +44,21 @@ Designed to score Advanced [10pt] on every rubric criterion of STAT 5243's final
 
 ---
 
+## Dataset files in this repo
+
+To satisfy the deliverable requirement for both raw and processed data, this repository now includes:
+
+- `data/raw/football_data_uk/*.parquet` — per-season raw match tables from football-data.co.uk
+- `data/raw/club_elo/*.parquet` — per-club historical Elo snapshots from ClubElo
+- `data/raw/wikipedia/*` — per-season recap tables and recap text artifacts
+- `data/interim/matches.parquet` — source-harmonized match-level table
+- `data/processed/matches.parquet` — final model-ready matrix
+- `data/processed/matches.csv` — CSV export of the processed matrix for grading convenience
+
+If you re-run the pipeline, these files are regenerated in place.
+
+---
+
 ## Tech stack
 
 - **App / UI:** Shiny for Python + shinywidgets + shinyswatch (Lux Bootstrap theme)
@@ -58,34 +73,29 @@ Designed to score Advanced [10pt] on every rubric criterion of STAT 5243's final
 
 ---
 
-## Quick start (will be filled in as the scaffold matures)
+## Quick start
 
 ```bash
 # 1. Install dependencies
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 
-# 2. Scrape data (cached after first run)
-python -m src.scrape.orchestrate --cached
+# 2. Run the one-command pipeline:
+#    feature engineering -> model selection -> final training
+python -m src.pipeline
 
-# 3. Build features
-python -m src.train --build-features
+# 3. (Optional) Re-run only selection and training
+python -m src.pipeline --skip-feature-engineering
 
-# 4. Train the model zoo
-python -m src.train --model all --tune
-
-# 5. Evaluate on the held-out 2020-21 season
-python -m src.evaluate --season 2020-21
-
-# 6. Run the Shiny app
+# 4. Run the Shiny app
 shiny run app.py
 
-# 7. Generate the final PDF report
+# 5. Generate the final PDF report
 python -m src.fill_report --template REPORT.md --metrics results/leaderboard.csv --out REPORT.filled.md
 pandoc REPORT.filled.md -o report.pdf --pdf-engine=xelatex --toc --toc-depth=2 \
        -V mainfont="Helvetica Neue" -V monofont=Menlo
 
-# 8. Run smoke + leakage tests
+# 6. Run smoke + leakage tests
 python -m unittest tests
 ```
 

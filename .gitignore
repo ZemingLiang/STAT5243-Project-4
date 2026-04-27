@@ -35,6 +35,9 @@ data/processed/
 
 # But DO keep the canonical processed match dataset committed when ready (override at end of project)
 # !data/processed/matches.parquet
+!data/
+!data/processed/
+!data/processed/matches.csv
 
 # Soccerdata cache
 .soccerdata/
